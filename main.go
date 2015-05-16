@@ -91,5 +91,6 @@ func initLogger() {
 }
 
 func init() {
+	//TODO: Configurable
 	runtime.GOMAXPROCS(runtime.NumCPU())
 }
