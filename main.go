@@ -47,6 +47,11 @@ func Debug(format string, v ...interface{}) {
 	}
 }
 
+// TODO: Does it make any sense?
+func Info(format string, v ...interface{}) {
+	logger.Printf(format, v...)
+}
+
 func initLogger(log_file string) (logger *log.Logger) {
 	if log_file != "" {
 		f, err := os.Create(log_file)
