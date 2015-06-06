@@ -1,15 +1,37 @@
 package main
 
 import (
+// Standard library packages
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 	"bytes"
-
+//	"sort"
+	"net/http"
+// Third party packages
 	"github.com/miekg/dns"
-	"sort"
+	"os"
+	"io/ioutil"
+	"encoding/json"
 )
+
+type Listed struct {
+	Year uint16 `json:"year"`
+	Month uint8 `json:"month"`
+	DayOfMonth uint8 `json:"dayOfMonth"`
+	HourOfDay  uint8 `json:"hourOfDay"`
+	Minute uint8 `json:"minute"`
+	Second  uint8 `json:"second"`
+}
+
+type BlackListedRecord struct {
+	Source string `json:"source"`
+	Listed Listed `json:"listed"`
+	BlackListedDomainOrIP string `json:"blackListedDomainOrIP"`
+	Taxonomy int32 `json:"taxonomy"`
+	Score int32 `json:"score"`
+}
 
 type ResolvError struct {
 	qname, net  string
@@ -25,30 +47,72 @@ type Resolver struct {
 	config *dns.ClientConfig
 }
 
+var coreApiServer string = "http://"+os.Getenv("SINKIT_CORE_SERVER")+":"+os.Getenv("SINKIT_CORE_SERVER_PORT")+"/sinkit/rest/blacklist/record/"
+func sinkitBackendCall(query string) (bool) {
+
+	url := coreApiServer+query
+	fmt.Println("URL:>", url)
+
+	//var jsonStr = []byte(`{"title":"Buy cheese and bread for breakfast."}`)
+	//req, err := http.NewRequest("GET", url, bytes.NewBuffer(jsonStr))
+	req, err := http.NewRequest("GET", url, nil)
+	req.Header.Set("X-sinkit-token", os.Getenv("SINKIT_ACCESS_TOKEN"))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	fmt.Println("response Status:", resp.Status)
+	fmt.Println("response Headers:", resp.Header)
+	body, _ := ioutil.ReadAll(resp.Body)
+	fmt.Println("response Body:", string(body))
+	if(len(body) < 10) {
+		return false
+	}
+
+	var blacklistedRecord BlackListedRecord
+	err = json.Unmarshal(body, &blacklistedRecord)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("\nblacklistedRecord.source[%s]\n", blacklistedRecord.Source)
+
+	return true
+}
+
+
 // Dummy playground
-func sinkByHostname(qname string) (bool){
+func sinkByHostname(qname string) (bool) {
+	return sinkitBackendCall(strings.TrimSuffix(qname, "."))
+/*
 	dummyTestHostnames := []string{"google.com", "root.cz", "seznam.cz", "youtube.com"}
 	//OMG...
 	sort.Strings(dummyTestHostnames)
-	if(sort.SearchStrings(dummyTestHostnames, qname) == len(dummyTestHostnames)){
+	if (sort.SearchStrings(dummyTestHostnames, qname) == len(dummyTestHostnames)) {
 		return false
 	}
 	return true
+*/
 }
 
 // Dummy playground
 func sinkByIPAddress(msg *dns.Msg) (bool) {
-
 	/*if !aRecord.Equal(ip) {
 			t.Fatalf("IP %q does not match registered IP %q", aRecord, ip)
 		}*/
-
-	dummyTestIPAddresses := []string{"81.19.0.120"}
-	sort.Strings(dummyTestIPAddresses)
-	//TODO: This dummy snippet is just for testing; We will search redis/use REST API presently.
+	//dummyTestIPAddresses := []string{"81.19.0.120"}
+	//sort.Strings(dummyTestIPAddresses)
 	for _, element := range msg.Answer {
 		Info("\nKARMTAG: RR Element: %s\n", element)
-		if(sort.SearchStrings(dummyTestIPAddresses, element.String()) !=  len(dummyTestIPAddresses)){
+		//if (sort.SearchStrings(dummyTestIPAddresses, element.String()) !=  len(dummyTestIPAddresses)) {
+	//		return true
+	//	}
+		var respElemSegments = strings.Split(element.String(), "	")
+		if(sinkitBackendCall((respElemSegments[len(respElemSegments)-1:])[0])) {
 			return true
 		}
 	}
@@ -61,7 +125,7 @@ func sendToSinkhole(msg *dns.Msg, qname string) {
 	var buffer bytes.Buffer
 	buffer.WriteString(qname)
 	buffer.WriteString("	")
-	buffer.WriteString("300	")
+	buffer.WriteString("5	")
 	buffer.WriteString("IN	")
 	buffer.WriteString("A	")
 	buffer.WriteString("127.0.0.1")
@@ -118,7 +182,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg) (message *dns.Msg, err error
 		select {
 		case r := <-res:
 			Info("\n KARMTAG: Resolved to: %s\n", r.Answer)
-			if(sinkByIPAddress(r) || sinkByHostname(qname)) {
+			if (sinkByIPAddress(r) || sinkByHostname(qname)) {
 				Info("\n KARMTAG: %s GOES TO SINKHOLE! XXX\n", r.Answer)
 				sendToSinkhole(r, qname)
 			}
@@ -131,9 +195,9 @@ func (r *Resolver) Lookup(net string, req *dns.Msg) (message *dns.Msg, err error
 	wg.Wait()
 	select {
 	case r := <-res:
-		// TODO: Remove the following block, it is covered in the aforementioned loop
+	// TODO: Remove the following block, it is covered in the aforementioned loop
 		Info("\n Resolved to: %s", r.Answer)
-		if(sinkByIPAddress(r) || sinkByHostname(qname)) {
+		if (sinkByIPAddress(r) || sinkByHostname(qname)) {
 			Info("\n KARMTAG: %s GOES TO SINKHOLE! QQQQ\n", r.Answer)
 			sendToSinkhole(r, qname)
 		}
