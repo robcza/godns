@@ -142,19 +142,26 @@ func sinkByIPAddress(msg *dns.Msg) (bool) {
 // Dummy playground
 func sendToSinkhole(msg *dns.Msg, qname string) {
 	//TODO: Isn't it a clumsy concatenation?
+	var buffera bytes.Buffer
+	buffera.WriteString(os.Getenv("SINKIT_SINKHOLE_ADDRESS"))
+	buffera.WriteString("	")
+	buffera.WriteString("10	")
+	buffera.WriteString("IN	")
+	buffera.WriteString("A	")
+	buffera.WriteString(os.Getenv("SINKIT_SINKHOLE_IP"))
 	var buffer bytes.Buffer
 	buffer.WriteString(qname)
 	buffer.WriteString("	")
 	buffer.WriteString("10	")
 	buffer.WriteString("IN	")
 	buffer.WriteString("CNAME	")
-	buffer.WriteString("sinkhole-intfeed.ddns.net")
+	buffer.WriteString(os.Getenv("SINKIT_SINKHOLE_ADDRESS"))
 	//Sink only the first record
 	//msg.Answer[0], _ = dns.NewRR(buffer.String())
 	//Sink all records:
+	sinkRecordA, _ := dns.NewRR(buffera.String())
 	sinkRecord, _ := dns.NewRR(buffer.String())
-	msg.Answer = []dns.RR{sinkRecord}
-
+	msg.Answer = []dns.RR{sinkRecordA, sinkRecord}
 	logger.Info("\n KARMTAG: A record: %s", msg.Answer[0].(*dns.A).A)
 	return
 }
