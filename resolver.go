@@ -8,12 +8,13 @@ import (
 	"time"
 	"bytes"
 //	"sort"
-	"net/http"
+	"net"
 // Third party packages
 	"github.com/miekg/dns"
 	"os"
 	"io/ioutil"
 	"encoding/json"
+	"net/http"
 )
 
 type Listed struct {
@@ -26,11 +27,9 @@ type Listed struct {
 }
 
 type BlackListedRecord struct {
-	Source string `json:"source"`
-	Listed Listed `json:"listed"`
 	BlackListedDomainOrIP string `json:"blackListedDomainOrIP"`
-	Taxonomy int32 `json:"taxonomy"`
-	Score int32 `json:"score"`
+	Listed Listed `json:"listed"`
+	Sources map[string]string `json:"sources"`
 }
 
 type ResolvError struct {
@@ -47,8 +46,22 @@ type Resolver struct {
 	config *dns.ClientConfig
 }
 
+func dialTimeout(network, addr string) (net.Conn, error) {
+	return net.DialTimeout(network, addr, timeout)
+}
+
 var coreApiServer string = "http://"+os.Getenv("SINKIT_CORE_SERVER")+":"+os.Getenv("SINKIT_CORE_SERVER_PORT")+"/sinkit/rest/blacklist/record/"
+var timeout = time.Duration(2 * time.Second)
+var transport = http.Transport {
+	Dial: dialTimeout,
+}
 func sinkitBackendCall(query string) (bool) {
+
+	//TODO This is just a provisional check. We need to think it over...
+	if(len(query) > 250) {
+		fmt.Printf("Query is too long: %d\n",len(query))
+		return false
+	}
 
 	url := coreApiServer+query
 	fmt.Println("URL:>", url)
@@ -59,17 +72,23 @@ func sinkitBackendCall(query string) (bool) {
 	req.Header.Set("X-sinkit-token", os.Getenv("SINKIT_ACCESS_TOKEN"))
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{
+		Transport: &transport,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		fmt.Println("There has been an error with backend.")
+		return false
 	}
 	defer resp.Body.Close()
 
 	fmt.Println("response Status:", resp.Status)
 	fmt.Println("response Headers:", resp.Header)
 	body, _ := ioutil.ReadAll(resp.Body)
-	fmt.Println("response Body:", string(body))
+	if(resp.StatusCode != 200) {
+		fmt.Println("response Body:", string(body))
+		return false
+	}
 	if(len(body) < 10) {
 		return false
 	}
@@ -77,9 +96,10 @@ func sinkitBackendCall(query string) (bool) {
 	var blacklistedRecord BlackListedRecord
 	err = json.Unmarshal(body, &blacklistedRecord)
 	if err != nil {
-		panic(err)
+		fmt.Println("There has been an error with unmarshalling the response: %s", body)
+		return false
 	}
-	fmt.Printf("\nblacklistedRecord.source[%s]\n", blacklistedRecord.Source)
+	fmt.Printf("\nblacklistedRecord.sources[%s]\n", blacklistedRecord.Sources)
 
 	return true
 }
@@ -122,20 +142,29 @@ func sinkByIPAddress(msg *dns.Msg) (bool) {
 // Dummy playground
 func sendToSinkhole(msg *dns.Msg, qname string) {
 	//TODO: Isn't it a clumsy concatenation?
+	var buffera bytes.Buffer
+	buffera.WriteString(os.Getenv("SINKIT_SINKHOLE_ADDRESS"))
+	buffera.WriteString("	")
+	buffera.WriteString("10	")
+	buffera.WriteString("IN	")
+	buffera.WriteString("A	")
+	buffera.WriteString(os.Getenv("SINKIT_SINKHOLE_IP"))
 	var buffer bytes.Buffer
 	buffer.WriteString(qname)
 	buffer.WriteString("	")
-	buffer.WriteString("5	")
+	buffer.WriteString("10	")
 	buffer.WriteString("IN	")
-	buffer.WriteString("A	")
-	buffer.WriteString("127.0.0.1")
+	buffer.WriteString("CNAME	")
+	buffer.WriteString(os.Getenv("SINKIT_SINKHOLE_ADDRESS"))
 	//Sink only the first record
 	//msg.Answer[0], _ = dns.NewRR(buffer.String())
 	//Sink all records:
+	sinkRecordA, _ := dns.NewRR(buffera.String())
 	sinkRecord, _ := dns.NewRR(buffer.String())
-	msg.Answer = []dns.RR{sinkRecord}
+	msg.Answer = []dns.RR{sinkRecordA, sinkRecord}
+	//Info("\n KARMTAG: A record: %s", msg.Answer[0].(*dns.A).String())
+	Info("\n KARMTAG: CNAME record: %s", msg.Answer[1].(*dns.CNAME).String())
 
-	Info("\n KARMTAG: A record: %s", msg.Answer[0].(*dns.A).A)
 	return
 }
 
