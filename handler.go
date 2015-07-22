@@ -157,7 +157,7 @@ func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 		}
 	}
 
-	mesg, err := h.resolver.Lookup(Net, req)
+	mesg, err := h.resolver.Lookup(Net, req, w.LocalAddr())
 
 	if err != nil {
 		logger.Warn("Resolve query error %s", err)
