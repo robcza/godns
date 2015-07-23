@@ -50,21 +50,27 @@ func dialTimeout(network, addr string) (net.Conn, error) {
 	return net.DialTimeout(network, addr, timeout)
 }
 
-var coreApiServer string = "http://"+os.Getenv("SINKIT_CORE_SERVER")+":"+os.Getenv("SINKIT_CORE_SERVER_PORT")+"/sinkit/rest/blacklist/record/"
+var coreApiServer string = "http://"+os.Getenv("SINKIT_CORE_SERVER")+":"+os.Getenv("SINKIT_CORE_SERVER_PORT")+"/sinkit/rest/blacklist/dns"
 var timeout = time.Duration(2 * time.Second)
-var transport = http.Transport {
+var transport = http.Transport{
 	Dial: dialTimeout,
 }
-func sinkitBackendCall(query string) (bool) {
+func sinkitBackendCall(query string, clientAddress string) (bool) {
 
 	//TODO This is just a provisional check. We need to think it over...
-	if(len(query) > 250) {
-		fmt.Printf("Query is too long: %d\n",len(query))
+	if (len(query) > 250) {
+		fmt.Printf("Query is too long: %d\n", len(query))
 		return false
 	}
 
-	url := coreApiServer+query
-	fmt.Println("URL:>", url)
+	var bufferQuery bytes.Buffer
+	bufferQuery.WriteString(coreApiServer)
+	bufferQuery.WriteString("/")
+	bufferQuery.WriteString(clientAddress)
+	bufferQuery.WriteString("/")
+	bufferQuery.WriteString(query)
+	url := bufferQuery.String()
+	Debug("URL:>", url)
 
 	//var jsonStr = []byte(`{"title":"Buy cheese and bread for breakfast."}`)
 	//req, err := http.NewRequest("GET", url, bytes.NewBuffer(jsonStr))
@@ -77,26 +83,26 @@ func sinkitBackendCall(query string) (bool) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("There has been an error with backend.")
+		Debug("There has been an error with backend.")
 		return false
 	}
 	defer resp.Body.Close()
 
-	fmt.Println("response Status:", resp.Status)
-	fmt.Println("response Headers:", resp.Header)
+	Debug("response Status:", resp.Status)
+	Debug("response Headers:", resp.Header)
 	body, _ := ioutil.ReadAll(resp.Body)
-	if(resp.StatusCode != 200) {
-		fmt.Println("response Body:", string(body))
+	if (resp.StatusCode != 200) {
+		Debug("response Body:", string(body))
 		return false
 	}
-	if(len(body) < 10) {
+	if (len(body) < 10) {
 		return false
 	}
 
 	var blacklistedRecord BlackListedRecord
 	err = json.Unmarshal(body, &blacklistedRecord)
 	if err != nil {
-		fmt.Println("There has been an error with unmarshalling the response: %s", body)
+		Debug("There has been an error with unmarshalling the response: %s", body)
 		return false
 	}
 	fmt.Printf("\nblacklistedRecord.sources[%s]\n", blacklistedRecord.Sources)
@@ -104,35 +110,25 @@ func sinkitBackendCall(query string) (bool) {
 	return true
 }
 
-
 // Dummy playground
-func sinkByHostname(qname string) (bool) {
-	return sinkitBackendCall(strings.TrimSuffix(qname, "."))
-/*
-	dummyTestHostnames := []string{"google.com", "root.cz", "seznam.cz", "youtube.com"}
-	//OMG...
-	sort.Strings(dummyTestHostnames)
-	if (sort.SearchStrings(dummyTestHostnames, qname) == len(dummyTestHostnames)) {
-		return false
-	}
-	return true
-*/
+func sinkByHostname(qname string, clientAddress string) (bool) {
+	return sinkitBackendCall(strings.TrimSuffix(qname, "."), clientAddress)
 }
 
 // Dummy playground
-func sinkByIPAddress(msg *dns.Msg) (bool) {
+func sinkByIPAddress(msg *dns.Msg, clientAddress string) (bool) {
 	/*if !aRecord.Equal(ip) {
 			t.Fatalf("IP %q does not match registered IP %q", aRecord, ip)
 		}*/
 	//dummyTestIPAddresses := []string{"81.19.0.120"}
 	//sort.Strings(dummyTestIPAddresses)
 	for _, element := range msg.Answer {
-		Info("\nKARMTAG: RR Element: %s\n", element)
+		Debug("\nKARMTAG: RR Element: %s\n", element)
 		//if (sort.SearchStrings(dummyTestIPAddresses, element.String()) !=  len(dummyTestIPAddresses)) {
-	//		return true
-	//	}
+		//		return true
+		//	}
 		var respElemSegments = strings.Split(element.String(), "	")
-		if(sinkitBackendCall((respElemSegments[len(respElemSegments)-1:])[0])) {
+		if (sinkitBackendCall((respElemSegments[len(respElemSegments)-1:])[0], clientAddress)) {
 			return true
 		}
 	}
@@ -141,37 +137,27 @@ func sinkByIPAddress(msg *dns.Msg) (bool) {
 
 // Dummy playground
 func sendToSinkhole(msg *dns.Msg, qname string) {
-	//TODO: Isn't it a clumsy concatenation?
-	var buffera bytes.Buffer
-	buffera.WriteString(os.Getenv("SINKIT_SINKHOLE_ADDRESS"))
-	buffera.WriteString("	")
-	buffera.WriteString("10	")
-	buffera.WriteString("IN	")
-	buffera.WriteString("A	")
-	buffera.WriteString(os.Getenv("SINKIT_SINKHOLE_IP"))
 	var buffer bytes.Buffer
 	buffer.WriteString(qname)
 	buffer.WriteString("	")
 	buffer.WriteString("10	")
 	buffer.WriteString("IN	")
-	buffer.WriteString("CNAME	")
-	buffer.WriteString(os.Getenv("SINKIT_SINKHOLE_ADDRESS"))
+	buffer.WriteString("A	")
+	buffer.WriteString(os.Getenv("SINKIT_SINKHOLE_IP"))
 	//Sink only the first record
 	//msg.Answer[0], _ = dns.NewRR(buffer.String())
 	//Sink all records:
-	sinkRecordA, _ := dns.NewRR(buffera.String())
 	sinkRecord, _ := dns.NewRR(buffer.String())
-	msg.Answer = []dns.RR{sinkRecordA, sinkRecord}
-	//Info("\n KARMTAG: A record: %s", msg.Answer[0].(*dns.A).String())
-	Info("\n KARMTAG: CNAME record: %s", msg.Answer[1].(*dns.CNAME).String())
-
+	msg.Answer = []dns.RR{sinkRecord}
+	//Debug("\n KARMTAG: A record: %s", msg.Answer[0].(*dns.A).String())
+	//Debug("\n KARMTAG: CNAME record: %s", msg.Answer[1].(*dns.CNAME).String())
 	return
 }
 
 // Lookup will ask each nameserver in top-to-bottom fashion, starting a new request
 // in every second, and return as early as possible (have an answer).
 // It returns an error if no request has succeeded.
-func (r *Resolver) Lookup(net string, req *dns.Msg) (message *dns.Msg, err error) {
+func (r *Resolver) Lookup(net string, req *dns.Msg, localAddress net.Addr) (message *dns.Msg, err error) {
 	c := &dns.Client{
 		Net:          net,
 		ReadTimeout:  r.Timeout(),
@@ -179,6 +165,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg) (message *dns.Msg, err error
 	}
 
 	qname := req.Question[0].Name
+	clientAddress := localAddress.Network()
 
 	res := make(chan *dns.Msg, 1)
 	var wg sync.WaitGroup
@@ -194,7 +181,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg) (message *dns.Msg, err error
 			Debug("%s failed to get an valid answer on %s", qname, nameserver)
 			return
 		}
-		Info("\n KARMTAG: %s resolv on %s (%s) ttl: %d\n", UnFqdn(qname), nameserver, net, rtt)
+		Debug("\n KARMTAG: %s resolv on %s (%s) ttl: %d\n", UnFqdn(qname), nameserver, net, rtt)
 		select {
 		case res <- r:
 		default:
@@ -210,9 +197,9 @@ func (r *Resolver) Lookup(net string, req *dns.Msg) (message *dns.Msg, err error
 		// but exit early, if we have an answer
 		select {
 		case r := <-res:
-			Info("\n KARMTAG: Resolved to: %s\n", r.Answer)
-			if (sinkByIPAddress(r) || sinkByHostname(qname)) {
-				Info("\n KARMTAG: %s GOES TO SINKHOLE! XXX\n", r.Answer)
+			Debug("\n KARMTAG: Resolved to: %s\n", r.Answer)
+			if (sinkByHostname(qname, clientAddress) || sinkByIPAddress(r, clientAddress)) {
+				Debug("\n KARMTAG: %s GOES TO SINKHOLE! XXX\n", r.Answer)
 				sendToSinkhole(r, qname)
 			}
 			return r, nil
@@ -225,9 +212,9 @@ func (r *Resolver) Lookup(net string, req *dns.Msg) (message *dns.Msg, err error
 	select {
 	case r := <-res:
 	// TODO: Remove the following block, it is covered in the aforementioned loop
-		Info("\n Resolved to: %s", r.Answer)
-		if (sinkByIPAddress(r) || sinkByHostname(qname)) {
-			Info("\n KARMTAG: %s GOES TO SINKHOLE! QQQQ\n", r.Answer)
+		Debug("\n Resolved to: %s", r.Answer)
+		if (sinkByHostname(qname, clientAddress) || sinkByIPAddress(r, clientAddress)) {
+			Debug("\n KARMTAG: %s GOES TO SINKHOLE! QQQQ\n", r.Answer)
 			sendToSinkhole(r, qname)
 		}
 		return r, nil
