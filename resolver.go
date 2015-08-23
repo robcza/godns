@@ -157,7 +157,7 @@ func sendToSinkhole(msg *dns.Msg, qname string) {
 // Lookup will ask each nameserver in top-to-bottom fashion, starting a new request
 // in every second, and return as early as possible (have an answer).
 // It returns an error if no request has succeeded.
-func (r *Resolver) Lookup(net string, req *dns.Msg, localAddress net.Addr) (message *dns.Msg, err error) {
+func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (message *dns.Msg, err error) {
 	c := &dns.Client{
 		Net:          net,
 		ReadTimeout:  r.Timeout(),
@@ -165,7 +165,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, localAddress net.Addr) (mess
 	}
 
 	qname := req.Question[0].Name
-	clientAddress := localAddress.Network()
+	clientAddress := strings.Split(remoteAddress.String(),":")[0]
 
 	res := make(chan *dns.Msg, 1)
 	var wg sync.WaitGroup
@@ -227,13 +227,21 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, localAddress net.Addr) (mess
 // Namservers return the array of nameservers, with port number appended.
 // '#' in the name is treated as port separator, as with dnsmasq.
 func (r *Resolver) Nameservers() (ns []string) {
-	for _, server := range r.config.Servers {
-		if i := strings.IndexByte(server, '#'); i > 0 {
-			server = server[:i] + ":" + server[i+1:]
-		} else {
-			server = server + ":" + r.config.Port
+	if (settings.Backend.UseExclusively) {
+		Debug("Using exclusively these backend servers:\n")
+		for _, server := range settings.Backend.BackendResolvers {
+			Debug(" Appending backend server: %s \n", server)
+			ns = append(ns, server)
 		}
-		ns = append(ns, server)
+	} else {
+		for _, server := range r.config.Servers {
+			if i := strings.IndexByte(server, '#'); i > 0 {
+				server = server[:i] + ":" + server[i+1:]
+			} else {
+				server = server + ":" + r.config.Port
+			}
+			ns = append(ns, server)
+		}
 	}
 	return
 }

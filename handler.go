@@ -82,7 +82,8 @@ func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 	q := req.Question[0]
 	Q := Question{UnFqdn(q.Name), dns.TypeToString[q.Qtype], dns.ClassToString[q.Qclass]}
 
-	Debug("Question:　%s", Q.String())
+	Debug("Question: %s", Q.String())
+	Debug("w.RemoteAddr().String(): %s", w.RemoteAddr().String())
 
 	IPQuery := h.isIPQuery(q)
 
@@ -143,7 +144,7 @@ func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 		}
 	}
 
-	mesg, err := h.resolver.Lookup(Net, req, w.LocalAddr())
+	mesg, err := h.resolver.Lookup(Net, req, w.RemoteAddr())
 
 	if err != nil {
 		Debug("%s", err)
