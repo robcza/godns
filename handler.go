@@ -92,7 +92,9 @@ func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 	} else {
 		remote = w.RemoteAddr().(*net.UDPAddr).IP
 	}
-	logger.Info("%s lookup　%s", remote, Q.String())
+	logger.Debug("%s lookup　%s", remote, Q.String())
+	logger.Debug("Question: %s", Q.String())
+	logger.Debug("w.RemoteAddr().String(): %s", w.RemoteAddr().String())
 
 	IPQuery := h.isIPQuery(q)
 
@@ -157,7 +159,7 @@ func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 		}
 	}
 
-	mesg, err := h.resolver.Lookup(Net, req, w.LocalAddr())
+	mesg, err := h.resolver.Lookup(Net, req, w.RemoteAddr())
 
 	if err != nil {
 		logger.Warn("Resolve query error %s", err)
