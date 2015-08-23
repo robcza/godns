@@ -30,6 +30,7 @@ type Settings struct {
 	Log          LogSettings       `toml:"log"`
 	Cache        CacheSettings     `toml:"cache"`
 	Hosts        HostsSettings     `toml:"hosts"`
+	Backend      BackendSettings   `toml:"backend"`
 }
 
 type ResolvSettings struct {
@@ -83,6 +84,10 @@ type HostsSettings struct {
 	RefreshInterval uint32 `toml:"refresh-interval"`
 }
 
+type BackendSettings struct {
+	BackendResolvers []string `toml:"backend-recursive-resolvers"`
+	UseExclusively bool `toml:"use-exclusively"`
+}
 func init() {
 
 	var configFile string

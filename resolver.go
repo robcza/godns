@@ -236,13 +236,19 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, localAddress net.Addr) (mess
 // Namservers return the array of nameservers, with port number appended.
 // '#' in the name is treated as port separator, as with dnsmasq.
 func (r *Resolver) Nameservers() (ns []string) {
-	for _, server := range r.config.Servers {
-		if i := strings.IndexByte(server, '#'); i > 0 {
-			server = server[:i] + ":" + server[i+1:]
-		} else {
-			server = server + ":" + r.config.Port
+	if (settings.Backend.UseExclusively) {
+		for _, server := range settings.Backend.BackendResolvers {
+			ns = append(ns, server)
 		}
-		ns = append(ns, server)
+	} else {
+		for _, server := range r.config.Servers {
+			if i := strings.IndexByte(server, '#'); i > 0 {
+				server = server[:i] + ":" + server[i+1:]
+			} else {
+				server = server + ":" + r.config.Port
+			}
+			ns = append(ns, server)
+		}
 	}
 	return
 }
