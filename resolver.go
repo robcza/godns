@@ -9,12 +9,14 @@ import (
 	"bytes"
 //	"sort"
 	"net"
+	"strconv"
 // Third party packages
 	"github.com/miekg/dns"
 	"os"
 	"io/ioutil"
 	"encoding/json"
 	"net/http"
+
 )
 
 type Listed struct {
@@ -56,6 +58,13 @@ var transport = http.Transport{
 	Dial: dialTimeout,
 }
 func sinkitBackendCall(query string, clientAddress string) (bool) {
+
+	// Don't bother contacting Infinispan Sinkit Core
+	infDisabled, err := strconv.ParseBool(os.Getenv("SINKIT_RESOLVER_DISABLE_INFINISPAN"))
+	if(err == nil && infDisabled) {
+		return true
+	}
+
 
 	//TODO This is just a provisional check. We need to think it over...
 	if (len(query) > 250) {
