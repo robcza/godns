@@ -16,7 +16,7 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"net/http"
-
+	"sync/atomic"
 )
 
 type Listed struct {
@@ -48,30 +48,59 @@ type Resolver struct {
 	config *dns.ClientConfig
 }
 
+type CoreError struct {
+	When time.Time
+	What string
+}
+
+func (e CoreError) Error() string {
+	return fmt.Sprintf("%v: %v", e.When, e.What)
+}
+
+
 func dialTimeout(network, addr string) (net.Conn, error) {
 	return net.DialTimeout(network, addr, timeout)
 }
 
-var coreApiServer string = "http://"+os.Getenv("SINKIT_CORE_SERVER")+":"+os.Getenv("SINKIT_CORE_SERVER_PORT")+"/sinkit/rest/blacklist/dns"
-var timeout = time.Duration(2 * time.Second)
+const (
+	hardRequestTimeout = 2 * time.Second
+	fitResponseTime = 10  * time.Millisecond
+	sleepWhenDisabled int64 = 5 //Seconds
+)
+
+var coreApiServer = "http://"+os.Getenv("SINKIT_CORE_SERVER")+":"+os.Getenv("SINKIT_CORE_SERVER_PORT")+"/sinkit/rest/blacklist/dns"
+var timeout = time.Duration(hardRequestTimeout)
 var transport = http.Transport{
 	Dial: dialTimeout,
 }
-func sinkitBackendCall(query string, clientAddress string) (bool) {
+var coreDisabled uint32 = 1
+var disabledSecondsTimestamp int64 = 0
 
-	// Don't bother contacting Infinispan Sinkit Core
-	infDisabled, err := strconv.ParseBool(os.Getenv("SINKIT_RESOLVER_DISABLE_INFINISPAN"))
-	if(err == nil && infDisabled) {
-		return true
+func dryAPICall(query string, clientAddress string) {
+	if (atomic.LoadInt64(&disabledSecondsTimestamp) == 0) {
+		Debug("disabledSecondsTimestamp was 0, setting it to the current time")
+		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
+		return
 	}
-
-
-	//TODO This is just a provisional check. We need to think it over...
-	if (len(query) > 250) {
-		fmt.Printf("Query is too long: %d\n", len(query))
-		return false
+	if (int64(time.Now().Unix()) - atomic.LoadInt64(&disabledSecondsTimestamp) > sleepWhenDisabled) {
+		Debug("Doing dry API call...")
+		start := time.Now()
+		_, err := doAPICall(query, clientAddress)
+		elapsed := time.Since(start)
+		if (err == nil && elapsed < fitResponseTime) {
+			Debug("Core is now ENABLED")
+			atomic.StoreUint32(&coreDisabled, 0)
+			return
+		} else {
+			Debug("Core remains DISABLED")
+		}
+	} else {
+		Debug("Not enough time passed, waiting for another call...")
 	}
+	return
+}
 
+func doAPICall(query string, clientAddress string) (value bool, err error) {
 	var bufferQuery bytes.Buffer
 	bufferQuery.WriteString(coreApiServer)
 	bufferQuery.WriteString("/")
@@ -93,7 +122,7 @@ func sinkitBackendCall(query string, clientAddress string) (bool) {
 	resp, err := client.Do(req)
 	if err != nil {
 		Debug("There has been an error with backend.")
-		return false
+		return false, err
 	}
 	defer resp.Body.Close()
 
@@ -102,21 +131,47 @@ func sinkitBackendCall(query string, clientAddress string) (bool) {
 	body, _ := ioutil.ReadAll(resp.Body)
 	if (resp.StatusCode != 200) {
 		Debug("response Body:", string(body))
-		return false
+		return false, CoreError{time.Now(), "Non HTTP 200."}
 	}
 	if (len(body) < 10) {
-		return false
+		return false, nil
 	}
 
 	var blacklistedRecord BlackListedRecord
 	err = json.Unmarshal(body, &blacklistedRecord)
 	if err != nil {
 		Debug("There has been an error with unmarshalling the response: %s", body)
-		return false
+		return false, err
 	}
 	fmt.Printf("\nblacklistedRecord.sources[%s]\n", blacklistedRecord.Sources)
 
-	return true
+	return true, nil
+}
+
+
+func sinkitBackendCall(query string, clientAddress string) (bool) {
+	// Don't bother contacting Infinispan Sinkit Core
+	// Move this to configuration, this is evaluating each time...
+	infDisabled, err := strconv.ParseBool(os.Getenv("SINKIT_RESOLVER_DISABLE_INFINISPAN"))
+	if (err == nil && infDisabled) {
+		return false
+	}
+
+	//TODO This is just a provisional check. We need to think it over...
+	if (len(query) > 250) {
+		fmt.Printf("Query is too long: %d\n", len(query))
+		return false
+	}
+
+	start := time.Now()
+	goToSinkhole, err := doAPICall(query, clientAddress)
+	elapsed := time.Since(start)
+	if (err != nil || elapsed > fitResponseTime) {
+		atomic.StoreUint32(&coreDisabled, 1)
+		return false
+	}
+
+	return goToSinkhole
 }
 
 // Dummy playground
@@ -174,7 +229,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 	}
 
 	qname := req.Question[0].Name
-	clientAddress := strings.Split(remoteAddress.String(),":")[0]
+	clientAddress := strings.Split(remoteAddress.String(), ":")[0]
 
 	res := make(chan *dns.Msg, 1)
 	var wg sync.WaitGroup
@@ -207,9 +262,16 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 		select {
 		case r := <-res:
 			Debug("\n KARMTAG: Resolved to: %s\n", r.Answer)
-			if (sinkByHostname(qname, clientAddress) || sinkByIPAddress(r, clientAddress)) {
-				Debug("\n KARMTAG: %s GOES TO SINKHOLE! XXX\n", r.Answer)
-				sendToSinkhole(r, qname)
+			if (atomic.LoadUint32(&coreDisabled) == 1) {
+				Debug("Core is DISABLED. Gonna call dryAPICall")
+				//TODO WARNING qname or r ???
+				go dryAPICall(qname, clientAddress)
+				Debug("...returning.")
+			} else {
+				if (sinkByHostname(qname, clientAddress) || sinkByIPAddress(r, clientAddress)) {
+					Debug("\n KARMTAG: %s GOES TO SINKHOLE! XXX\n", r.Answer)
+					sendToSinkhole(r, qname)
+				}
 			}
 			return r, nil
 		case <-ticker.C:
@@ -222,9 +284,16 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 	case r := <-res:
 	// TODO: Remove the following block, it is covered in the aforementioned loop
 		Debug("\n Resolved to: %s", r.Answer)
-		if (sinkByHostname(qname, clientAddress) || sinkByIPAddress(r, clientAddress)) {
-			Debug("\n KARMTAG: %s GOES TO SINKHOLE! QQQQ\n", r.Answer)
-			sendToSinkhole(r, qname)
+		if (atomic.LoadUint32(&coreDisabled) == 1) {
+			Debug("Core is DISABLED. Gonna call dryAPICall")
+			//TODO WARNING qname or r ???
+			go dryAPICall(qname, clientAddress)
+			Debug("...returning.")
+		} else {
+			if (sinkByHostname(qname, clientAddress) || sinkByIPAddress(r, clientAddress)) {
+				Debug("\n KARMTAG: %s GOES TO SINKHOLE! QQQQ\n", r.Answer)
+				sendToSinkhole(r, qname)
+			}
 		}
 		return r, nil
 	default:
