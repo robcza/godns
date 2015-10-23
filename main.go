@@ -26,6 +26,11 @@ func main() {
 	server.Run()
 
 	logger.Info("godns %s start", settings.Version)
+	logger.Info("godns %s start", settings.Version)
+	logger.Info("Core Backend Settings")
+	logger.Info("  FitResponseTime: ", settings.Backend.FitResponseTime)
+	logger.Info("  HardRequestTimeout: ", settings.Backend.HardRequestTimeout)
+	logger.Info("  SleepWhenDisabled: ", settings.Backend.SleepWhenDisabled)
 
 	if settings.Debug {
 		go profileCPU()

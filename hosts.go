@@ -85,7 +85,7 @@ func (h *Hosts) refresh() {
 	go func() {
 		for {
 			h.fileHosts.Refresh()
-			if h.redisHosts != nil {
+			if len(h.redisHosts.hosts) > 0 {
 				h.redisHosts.Refresh()
 			}
 			<-ticker.C
