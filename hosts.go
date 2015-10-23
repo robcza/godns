@@ -62,11 +62,11 @@ func (h *Hosts) Get(domain string, family int) (ip net.IP, ok bool) {
 }
 
 func (h *Hosts) refresh() {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(5*time.Minute)
 	go func() {
 		for {
 			h.fileHosts.Refresh()
-			if h.redisHosts != nil {
+			if len(h.redisHosts.hosts) > 0 {
 				h.redisHosts.Refresh()
 			}
 			<-ticker.C

@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 )
 
+/*
 type Listed struct {
 	Year uint16 `json:"year"`
 	Month uint8 `json:"month"`
@@ -27,11 +28,17 @@ type Listed struct {
 	Minute uint8 `json:"minute"`
 	Second  uint8 `json:"second"`
 }
-
+*/
+/*
 type BlackListedRecord struct {
 	BlackListedDomainOrIP string `json:"blackListedDomainOrIP"`
 	Listed Listed `json:"listed"`
 	Sources map[string]string `json:"sources"`
+}
+*/
+
+type Sinkhole struct {
+	Sinkhole string `json:"sinkhole"`
 }
 
 type ResolvError struct {
@@ -57,19 +64,11 @@ func (e CoreError) Error() string {
 	return fmt.Sprintf("%v: %v", e.When, e.What)
 }
 
-
 func dialTimeout(network, addr string) (net.Conn, error) {
-	return net.DialTimeout(network, addr, timeout)
+	return net.DialTimeout(network, addr, time.Duration(settings.Backend.HardRequestTimeout) * time.Second)
 }
 
-const (
-	hardRequestTimeout = 2 * time.Second
-	fitResponseTime = 10  * time.Millisecond
-	sleepWhenDisabled int64 = 5 //Seconds
-)
-
 var coreApiServer = "http://"+os.Getenv("SINKIT_CORE_SERVER")+":"+os.Getenv("SINKIT_CORE_SERVER_PORT")+"/sinkit/rest/blacklist/dns"
-var timeout = time.Duration(hardRequestTimeout)
 var transport = http.Transport{
 	Dial: dialTimeout,
 }
@@ -82,18 +81,23 @@ func dryAPICall(query string, clientAddress string) {
 		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 		return
 	}
-	if (int64(time.Now().Unix()) - atomic.LoadInt64(&disabledSecondsTimestamp) > sleepWhenDisabled) {
+	if (int64(time.Now().Unix()) - atomic.LoadInt64(&disabledSecondsTimestamp) > settings.Backend.SleepWhenDisabled) {
 		Debug("Doing dry API call...")
 		start := time.Now()
 		_, err := doAPICall(query, clientAddress)
 		elapsed := time.Since(start)
-		if (err == nil && elapsed < fitResponseTime) {
-			Debug("Core is now ENABLED")
-			atomic.StoreUint32(&coreDisabled, 0)
+		if (err != nil) {
+			Debug("Core remains DISABLED. Gonna wait. Error: %s", err)
+			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 			return
-		} else {
-			Debug("Core remains DISABLED")
 		}
+		if (elapsed > time.Duration(settings.Backend.FitResponseTime)*time.Millisecond) {
+			Debug("Core remains DISABLED. Gonna wait. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.Backend.FitResponseTime)*time.Millisecond)
+			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
+			return
+		}
+		Debug("Core is now ENABLED")
+		atomic.StoreUint32(&coreDisabled, 0)
 	} else {
 		Debug("Not enough time passed, waiting for another call...")
 	}
@@ -126,37 +130,31 @@ func doAPICall(query string, clientAddress string) (value bool, err error) {
 	}
 	defer resp.Body.Close()
 
-	Debug("response Status:", resp.Status)
-	Debug("response Headers:", resp.Header)
+	Debug("Response Status:", resp.Status)
+	Debug("Response Headers:", resp.Header)
 	body, _ := ioutil.ReadAll(resp.Body)
 	if (resp.StatusCode != 200) {
-		Debug("response Body:", string(body))
+		Debug("Response Body:", string(body))
 		return false, CoreError{time.Now(), "Non HTTP 200."}
 	}
-	if (len(body) < 10) {
+	// i.e. "null" or possible stray byte, not a sinkhole IP
+	if (len(body) < 6) {
+		Debug("Response short.")
 		return false, nil
 	}
 
-	var blacklistedRecord BlackListedRecord
-	err = json.Unmarshal(body, &blacklistedRecord)
+	var sinkhole Sinkhole
+	err = json.Unmarshal(body, &sinkhole)
 	if err != nil {
 		Debug("There has been an error with unmarshalling the response: %s", body)
 		return false, err
 	}
-	fmt.Printf("\nblacklistedRecord.sources[%s]\n", blacklistedRecord.Sources)
+	fmt.Printf("\nSINKHOLE RETURNED from Core[%s]\n", sinkhole.Sinkhole)
 
 	return true, nil
 }
 
-
 func sinkitBackendCall(query string, clientAddress string) (bool) {
-	// Don't bother contacting Infinispan Sinkit Core
-	// Move this to configuration, this is evaluating each time...
-	infDisabled, err := strconv.ParseBool(os.Getenv("SINKIT_RESOLVER_DISABLE_INFINISPAN"))
-	if (err == nil && infDisabled) {
-		return false
-	}
-
 	//TODO This is just a provisional check. We need to think it over...
 	if (len(query) > 250) {
 		fmt.Printf("Query is too long: %d\n", len(query))
@@ -166,8 +164,16 @@ func sinkitBackendCall(query string, clientAddress string) (bool) {
 	start := time.Now()
 	goToSinkhole, err := doAPICall(query, clientAddress)
 	elapsed := time.Since(start)
-	if (err != nil || elapsed > fitResponseTime) {
+	if (err != nil) {
 		atomic.StoreUint32(&coreDisabled, 1)
+		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
+		Debug("Core was DISABLED. Error: %s", err)
+		return false
+	}
+	if (elapsed > time.Duration(settings.Backend.FitResponseTime)*time.Millisecond) {
+		atomic.StoreUint32(&coreDisabled, 1)
+		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
+		Debug("Core was DISABLED. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.Backend.FitResponseTime)*time.Millisecond)
 		return false
 	}
 
@@ -197,6 +203,30 @@ func sinkByIPAddress(msg *dns.Msg, clientAddress string) (bool) {
 		}
 	}
 	return false
+}
+
+func processCoreCom(msg *dns.Msg, qname string, clientAddress string) {
+	// Don't bother contacting Infinispan Sinkit Core
+	// Move this to configuration, this is evaluating each time...
+	infDisabled, err := strconv.ParseBool(os.Getenv("SINKIT_RESOLVER_DISABLE_INFINISPAN"))
+	if (err == nil && infDisabled) {
+		Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN TRUE\n")
+		return
+	} else {
+		Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN FALSE or N/A\n")
+	}
+	Debug("\n KARMTAG: Resolved to: %s\n", msg.Answer)
+	if (atomic.LoadUint32(&coreDisabled) == 1) {
+		Debug("Core is DISABLED. Gonna call dryAPICall.")
+		//TODO qname or r for the dry run???
+		go dryAPICall(qname, clientAddress)
+		Debug("...returning.")
+	} else {
+		if (sinkByHostname(qname, clientAddress) || sinkByIPAddress(msg, clientAddress)) {
+			Debug("\n KARMTAG: %s GOES TO SINKHOLE!\n", msg.Answer)
+			sendToSinkhole(msg, qname)
+		}
+	}
 }
 
 // Dummy playground
@@ -261,18 +291,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 		// but exit early, if we have an answer
 		select {
 		case r := <-res:
-			Debug("\n KARMTAG: Resolved to: %s\n", r.Answer)
-			if (atomic.LoadUint32(&coreDisabled) == 1) {
-				Debug("Core is DISABLED. Gonna call dryAPICall")
-				//TODO WARNING qname or r ???
-				go dryAPICall(qname, clientAddress)
-				Debug("...returning.")
-			} else {
-				if (sinkByHostname(qname, clientAddress) || sinkByIPAddress(r, clientAddress)) {
-					Debug("\n KARMTAG: %s GOES TO SINKHOLE! XXX\n", r.Answer)
-					sendToSinkhole(r, qname)
-				}
-			}
+			processCoreCom(r, qname, clientAddress)
 			return r, nil
 		case <-ticker.C:
 			continue
@@ -282,19 +301,8 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 	wg.Wait()
 	select {
 	case r := <-res:
-	// TODO: Remove the following block, it is covered in the aforementioned loop
-		Debug("\n Resolved to: %s", r.Answer)
-		if (atomic.LoadUint32(&coreDisabled) == 1) {
-			Debug("Core is DISABLED. Gonna call dryAPICall")
-			//TODO WARNING qname or r ???
-			go dryAPICall(qname, clientAddress)
-			Debug("...returning.")
-		} else {
-			if (sinkByHostname(qname, clientAddress) || sinkByIPAddress(r, clientAddress)) {
-				Debug("\n KARMTAG: %s GOES TO SINKHOLE! QQQQ\n", r.Answer)
-				sendToSinkhole(r, qname)
-			}
-		}
+	//TODO: Redundant?
+		processCoreCom(r, qname, clientAddress)
 		return r, nil
 	default:
 		return nil, ResolvError{qname, net, r.Nameservers()}

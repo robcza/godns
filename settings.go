@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-
 	"github.com/BurntSushi/toml"
 )
 
@@ -68,7 +67,11 @@ type HostsSettings struct {
 type BackendSettings struct {
 	BackendResolvers []string `toml:"backend-recursive-resolvers"`
 	UseExclusively bool `toml:"use-exclusively"`
+	FitResponseTime int64 `toml:"fit-response-time"`
+	SleepWhenDisabled int64 `toml:"sleep-when-disabled"`
+	HardRequestTimeout int64 `toml:"hard-request-timeout"`
 }
+
 func init() {
 
 	var configFile string

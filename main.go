@@ -26,6 +26,10 @@ func main() {
 	server.Run()
 
 	logger.Printf("godns %s start", settings.Version)
+	logger.Printf("Core Backend Settings")
+	logger.Printf("  FitResponseTime: ", settings.Backend.FitResponseTime)
+	logger.Printf("  HardRequestTimeout: ", settings.Backend.HardRequestTimeout)
+	logger.Printf("  SleepWhenDisabled: ", settings.Backend.SleepWhenDisabled)
 
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt)
