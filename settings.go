@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-
 	"github.com/BurntSushi/toml"
 )
 
@@ -22,6 +21,7 @@ type Settings struct {
 	Log          LogSettings       `toml:"log"`
 	Cache        CacheSettings     `toml:"cache"`
 	Hosts        HostsSettings     `toml:"hosts"`
+	Backend      BackendSettings   `toml:"backend"`
 }
 
 type ResolvSettings struct {
@@ -62,6 +62,14 @@ type HostsSettings struct {
 	RedisEnable bool   `toml:"redis-enable"`
 	RedisKey    string `toml:"redis-key"`
 	TTL         uint32 `toml:"ttl"`
+}
+
+type BackendSettings struct {
+	BackendResolvers []string `toml:"backend-recursive-resolvers"`
+	UseExclusively bool `toml:"use-exclusively"`
+	FitResponseTime int64 `toml:"fit-response-time"`
+	SleepWhenDisabled int64 `toml:"sleep-when-disabled"`
+	HardRequestTimeout int64 `toml:"hard-request-timeout"`
 }
 
 func init() {
