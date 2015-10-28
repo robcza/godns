@@ -273,9 +273,10 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 		}
 		if r != nil && r.Rcode != dns.RcodeSuccess {
 			Debug("%s failed to get an valid answer on %s", qname, nameserver)
-			return
 		}
-		Debug("\n KARMTAG: %s resolv on %s (%s) ttl: %d\n", UnFqdn(qname), nameserver, net, rtt)
+		else {
+			Debug("\n KARMTAG: %s resolv on %s (%s) ttl: %d\n", UnFqdn(qname), nameserver, net, rtt)
+		}
 		select {
 		case res <- r:
 		default:
