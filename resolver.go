@@ -281,7 +281,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 				return
 			}
 		} else {
-			logger.Debug("\n KARMTAG: %s resolv on %s (%s) ttl: %d", UnFqdn(qname), nameserver, net, rtt)
+			Debug("\n KARMTAG: %s resolv on %s (%s) ttl: %d", UnFqdn(qname), nameserver, net, rtt)
  		}
 		select {
 		case res <- r:
