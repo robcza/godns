@@ -271,11 +271,18 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 			Debug("error:%s", err.Error())
 			return
 		}
+		// If SERVFAIL happen, should return immediately and try another upstream resolver.
+		// However, other Error code like NXDOMAIN is an clear response stating
+		// that it has been verified no such domain existas and ask other resolvers
+		// would make no sense. See more about #20
 		if r != nil && r.Rcode != dns.RcodeSuccess {
 			Debug("%s failed to get an valid answer on %s", qname, nameserver)
-			return
-		}
-		Debug("\n KARMTAG: %s resolv on %s (%s) ttl: %d\n", UnFqdn(qname), nameserver, net, rtt)
+			if r.Rcode == dns.RcodeServerFailure {
+				return
+			}
+		} else {
+			logger.Debug("\n KARMTAG: %s resolv on %s (%s) ttl: %d", UnFqdn(qname), nameserver, net, rtt)
+ 		}
 		select {
 		case res <- r:
 		default:
