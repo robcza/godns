@@ -281,9 +281,8 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 				return
 			}
 		} else {
-			logger.Debug("%s resolv on %s (%s) ttl: %d", UnFqdn(qname), nameserver, net, rtt)
+			logger.Debug("\n KARMTAG: %s resolv on %s (%s) ttl: %d", UnFqdn(qname), nameserver, net, rtt)
 		}
-		logger.Debug("\n KARMTAG: %s resolv on %s (%s) ttl: %d\n", UnFqdn(qname), nameserver, net, rtt)
 		select {
 		case res <- r:
 		default:
@@ -316,7 +315,6 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 	default:
 		return nil, ResolvError{qname, net, r.Nameservers()}
 	}
-
 }
 
 // Namservers return the array of nameservers, with port number appended.
