@@ -291,6 +291,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 
 	ticker := time.NewTicker(time.Duration(settings.ResolvConfig.Interval) * time.Millisecond)
 	defer ticker.Stop()
+
 	// Start lookup on each nameserver top-down, in every second
 	for _, nameserver := range r.Nameservers() {
 		wg.Add(1)
