@@ -40,7 +40,7 @@ func main() {
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt)
 
-forever:
+	forever:
 	for {
 		select {
 		case <-sig:
@@ -77,7 +77,6 @@ func profileMEM() {
 		pprof.WriteHeapProfile(f)
 		f.Close()
 	})
-
 }
 
 func initLogger() {
