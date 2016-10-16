@@ -1,16 +1,13 @@
 package main
 
 import (
-// Standard library packages
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 	"bytes"
-//	"sort"
 	"net"
 	"strconv"
-// Third party packages
 	"github.com/miekg/dns"
 	"os"
 	"io/ioutil"
@@ -194,7 +191,6 @@ func sinkByIPAddress(msg *dns.Msg, clientAddress string, qname string) {
 			logger.Debug("KARMTAG: value: %s\n", vals[i])
 			if (strings.EqualFold(vals[i], "A") || strings.EqualFold(vals[i], "CNAME") || strings.EqualFold(vals[i], "AAAA")) {
 				logger.Debug("KARMTAG: value matches: %s\n", vals[i])
-
 				// Length in bytes, not runes. Shorter doesn't make sense.
 				// We ditch .root-servers.net.
 				if (len(vals) > i+1 && len(vals[i+1]) > 3 && !strings.HasSuffix(vals[i+1], ".root-servers.net.")) {
@@ -294,7 +290,6 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 
 	ticker := time.NewTicker(time.Duration(settings.ResolvConfig.Interval) * time.Millisecond)
 	defer ticker.Stop()
-
 	// Start lookup on each nameserver top-down, in every second
 	for _, nameserver := range r.Nameservers() {
 		wg.Add(1)
@@ -310,7 +305,6 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr) (mes
 	}
 	// wait for all the namservers to finish
 	wg.Wait()
-
 	select {
 	case r := <-res:
 	//TODO: Redundant?
