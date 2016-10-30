@@ -41,6 +41,8 @@ type ResolvSettings struct {
 type DNSServerSettings struct {
 	Host string
 	Port int
+	ReadTimeout int
+	WriteTimeout int
 }
 
 type RedisSettings struct {

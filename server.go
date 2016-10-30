@@ -37,7 +37,7 @@ func (s *Server) Run() {
 	udpServer := &dns.Server{Addr: s.Addr(),
 		Net:          "udp",
 		Handler:      udpHandler,
-		UDPSize:      65535,
+		UDPSize:      65507,
 		ReadTimeout:  s.rTimeout,
 		WriteTimeout: s.wTimeout}
 

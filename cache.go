@@ -1,14 +1,12 @@
 package main
 
 import (
-	"crypto/md5"
-	"encoding/json"
-	"fmt"
+	//"crypto/md5"
+	//"fmt"
 	"sync"
 	"time"
 
-	"github.com/hoisie/redis"
-	"github.com/miekg/dns"
+	//"github.com/miekg/dns"
 )
 
 type KeyNotFound struct {
@@ -41,57 +39,62 @@ func (e SerializerError) Error() string {
 	return "Serializer error"
 }
 
-type Mesg struct {
-	Msg    *dns.Msg
+type Data struct {
+	OraculumResponse *bool
 	Expire time.Time
 }
 
 type Cache interface {
-	Get(key string) (Msg *dns.Msg, err error)
-	Set(key string, Msg *dns.Msg) error
+	Get(key string) (OraculumResponse *bool, err error)
+	Set(key string, OraculumResponse *bool) error
 	Exists(key string) bool
 	Remove(key string)
 	Length() int
 }
 
 type MemoryCache struct {
-	Backend  map[string]Mesg
+	Backend  map[string]Data
 	Expire   time.Duration
 	Maxcount int
 	mu       sync.RWMutex
 }
 
-func (c *MemoryCache) Get(key string) (*dns.Msg, error) {
+func (c *MemoryCache) Get(key string) (*bool, error) {
+	logger.Debug("Cache Get: called for key: %s", key)
 	c.mu.RLock()
-	mesg, ok := c.Backend[key]
+	data, ok := c.Backend[key]
 	c.mu.RUnlock()
 	if !ok {
+		logger.Debug("Cache Get: key: %s was not found.", key)
 		return nil, KeyNotFound{key}
 	}
 
-	if mesg.Expire.Before(time.Now()) {
+	if data.Expire.Before(time.Now()) {
+		logger.Debug("Cache Get: key: %s expired at %s. Returning nil.", key, data.Expire.Format(time.RFC3339))
 		c.Remove(key)
 		return nil, KeyExpired{key}
 	}
-
-	return mesg.Msg, nil
-
+	logger.Debug("Cache Get: key: %s found value: %t", key, data.OraculumResponse)
+	return data.OraculumResponse, nil
 }
 
-func (c *MemoryCache) Set(key string, msg *dns.Msg) error {
+func (c *MemoryCache) Set(key string, oraculumResponse *bool) error {
 	if c.Full() && !c.Exists(key) {
+		logger.Debug("Cache Set: key: %s, Cache is full.", key)
 		return CacheIsFull{}
 	}
 
 	expire := time.Now().Add(c.Expire)
-	mesg := Mesg{msg, expire}
+	data := Data{oraculumResponse, expire}
+	logger.Debug("Cache Set: key: %s, value: %t, expires at: %s", key, oraculumResponse, expire.Format(time.RFC3339))
 	c.mu.Lock()
-	c.Backend[key] = mesg
+	c.Backend[key] = data
 	c.mu.Unlock()
 	return nil
 }
 
 func (c *MemoryCache) Remove(key string) {
+	logger.Debug("Cache Remove: key: %s was removed.", key)
 	c.mu.Lock()
 	delete(c.Backend, key)
 	c.mu.Unlock()
@@ -101,6 +104,7 @@ func (c *MemoryCache) Exists(key string) bool {
 	c.mu.RLock()
 	_, ok := c.Backend[key]
 	c.mu.RUnlock()
+	logger.Debug("Cache Exists: key: %s exists: %t", key, ok)
 	return ok
 }
 
@@ -117,30 +121,7 @@ func (c *MemoryCache) Full() bool {
 	}
 	return c.Length() >= c.Maxcount
 }
-
 /*
-TODO: Redis cache Backend
-*/
-
-type RedisCache struct {
-	Backend    *redis.Client
-	Serializer JsonSerializer
-	Expire     time.Duration
-	Maxcount   int
-}
-
-func (c *RedisCache) Get() {
-
-}
-
-func (c *RedisCache) Set() {
-
-}
-
-func (c *RedisCache) Remove() {
-
-}
-
 func KeyGen(q Question) string {
 	h := md5.New()
 	h.Write([]byte(q.String()))
@@ -148,17 +129,4 @@ func KeyGen(q Question) string {
 	key := fmt.Sprintf("%x", x)
 	return key
 }
-
-type JsonSerializer struct {
-}
-
-func (*JsonSerializer) Dumps(mesg *dns.Msg) (encoded []byte, err error) {
-	encoded, err = json.Marshal(mesg)
-	return
-}
-
-func (*JsonSerializer) Loads(data []byte, mesg **dns.Msg) error {
-	err := json.Unmarshal(data, mesg)
-	return err
-
-}
+*/

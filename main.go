@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-	"runtime/pprof"
 	"time"
 )
 
@@ -19,8 +18,8 @@ func main() {
 	server := &Server{
 		host:     settings.Server.Host,
 		port:     settings.Server.Port,
-		rTimeout: 5 * time.Second,
-		wTimeout: 5 * time.Second,
+		rTimeout: time.Duration(settings.Server.ReadTimeout) * time.Second,
+		wTimeout: time.Duration(settings.Server.WriteTimeout) * time.Second,
 	}
 
 	server.Run()
@@ -28,14 +27,9 @@ func main() {
 	logger.Info("godns %s start", settings.Version)
 	logger.Info("godns %s start", settings.Version)
 	logger.Info("Core Backend Settings")
-	logger.Info("  FitResponseTime: ", settings.Backend.FitResponseTime)
-	logger.Info("  HardRequestTimeout: ", settings.Backend.HardRequestTimeout)
-	logger.Info("  SleepWhenDisabled: ", settings.Backend.SleepWhenDisabled)
-
-	if settings.Debug {
-		go profileCPU()
-		go profileMEM()
-	}
+	logger.Info("  FitResponseTime: %d ms", settings.Backend.FitResponseTime)
+	logger.Info("  HardRequestTimeout: %d ms", settings.Backend.HardRequestTimeout)
+	logger.Info("  SleepWhenDisabled: %d ms", settings.Backend.SleepWhenDisabled)
 
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt)
@@ -49,34 +43,6 @@ func main() {
 		}
 	}
 
-}
-
-func profileCPU() {
-	f, err := os.Create("godns.cprof")
-	if err != nil {
-		logger.Error("%s", err)
-		return
-	}
-
-	pprof.StartCPUProfile(f)
-	time.AfterFunc(6*time.Minute, func() {
-		pprof.StopCPUProfile()
-		f.Close()
-
-	})
-}
-
-func profileMEM() {
-	f, err := os.Create("godns.mprof")
-	if err != nil {
-		logger.Error("%s", err)
-		return
-	}
-
-	time.AfterFunc(5*time.Minute, func() {
-		pprof.WriteHeapProfile(f)
-		f.Close()
-	})
 }
 
 func initLogger() {
@@ -95,6 +61,5 @@ func initLogger() {
 }
 
 func init() {
-	//TODO: Configurable
 	runtime.GOMAXPROCS(runtime.NumCPU())
 }
