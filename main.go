@@ -1,10 +1,13 @@
 package main
 
+import _ "net/http/pprof"
 import (
 	"os"
 	"os/signal"
 	"runtime"
 	"time"
+	"log"
+	"net/http"
 )
 
 var (
@@ -12,6 +15,10 @@ var (
 )
 
 func main() {
+	// Profiler
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	initLogger()
 

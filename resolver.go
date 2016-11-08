@@ -38,6 +38,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr, orac
 	}
 
 	qname := req.Question[0].Name
+	//TODO: IPv6
 	clientAddress := strings.Split(remoteAddress.String(), ":")[0]
 
 	res := make(chan *dns.Msg, 1)

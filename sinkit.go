@@ -6,9 +6,7 @@ import (
 	"time"
 	"bytes"
 	"net"
-	"strconv"
 	"github.com/miekg/dns"
-	"os"
 	"io/ioutil"
 	"encoding/json"
 	"net/http"
@@ -20,16 +18,7 @@ import (
 type Sinkhole struct {
 	Sinkhole string `json:"sinkhole"`
 }
-/*
-type ResolvError struct {
-	qname, net  string
-	nameservers []string
-}
 
-type Resolver struct {
-	config *dns.ClientConfig
-}
-*/
 type CoreError struct {
 	When time.Time
 	What string
@@ -43,7 +32,6 @@ func dialTimeout(network, addr string) (net.Conn, error) {
 	return net.DialTimeout(network, addr, time.Duration(settings.Backend.HardRequestTimeout) * time.Millisecond)
 }
 
-var coreApiServer = "http://"+os.Getenv("SINKIT_CORE_SERVER")+":"+os.Getenv("SINKIT_CORE_SERVER_PORT")+"/sinkit/rest/blacklist/dns"
 var transport = http.Transport{
 	Dial: dialTimeout,
 }
@@ -85,7 +73,7 @@ func dryAPICall(query string, clientAddress string, qname string) {
 
 func doAPICall(query string, clientAddress string, trimmedQname string) (value bool, err error) {
 	var bufferQuery bytes.Buffer
-	bufferQuery.WriteString(coreApiServer)
+	bufferQuery.WriteString(settings.Backend.URL)
 	bufferQuery.WriteString("/")
 	bufferQuery.WriteString(clientAddress)
 	bufferQuery.WriteString("/")
@@ -98,7 +86,7 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 	//var jsonStr = []byte(`{"title":"Buy cheese and bread for breakfast."}`)
 	//req, err := http.NewRequest("GET", url, bytes.NewBuffer(jsonStr))
 	req, err := http.NewRequest("GET", url, nil)
-	req.Header.Set("X-sinkit-token", os.Getenv("SINKIT_ACCESS_TOKEN"))
+	req.Header.Set("X-sinkit-token", settings.Backend.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{
@@ -125,6 +113,7 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 	}
 
 	var sinkhole Sinkhole
+	//TODO Use Sinkole instead of env property
 	err = json.Unmarshal(body, &sinkhole)
 	if err != nil {
 		logger.Debug("There has been an error with unmarshalling the response: %s", body)
@@ -218,11 +207,9 @@ func sinkByIPAddress(msg *dns.Msg, clientAddress string, qname string, oraculumC
 	}
 }
 
-// Move this to configuration
-var infDisabled, infDisabledErr = strconv.ParseBool(os.Getenv("SINKIT_RESOLVER_DISABLE_INFINISPAN"))
 func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCache Cache) {
 	// Don't bother contacting Infinispan Sinkit Core
-	if (infDisabledErr == nil && infDisabled) {
+	if (settings.Backend.OraculumDisabled) {
 		logger.Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN TRUE\n")
 		return
 	} else {
@@ -257,7 +244,7 @@ func sendToSinkhole(msg *dns.Msg, qname string) {
 	buffer.WriteString("10	")
 	buffer.WriteString("IN	")
 	buffer.WriteString("A	")
-	buffer.WriteString(os.Getenv("SINKIT_SINKHOLE_IP"))
+	buffer.WriteString(settings.Backend.SinkholeAddress)
 	sinkRecord, _ := dns.NewRR(buffer.String())
 	msg.Answer = []dns.RR{sinkRecord}
 	return

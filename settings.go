@@ -1,11 +1,10 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"os"
-	"strconv"
-	"github.com/BurntSushi/toml"
+	"github.com/kelseyhightower/envconfig"
+	"time"
+	"log"
+	"runtime"
 )
 
 var (
@@ -21,45 +20,44 @@ var LogLevelMap = map[string]int{
 }
 
 type Settings struct {
+	//Debug = true
+	//Debug        bool
+	Server       DNSServerSettings
+	ResolvConfig ResolvSettings
+	Log          LogSettings
+	Cache        CacheSettings
+	Backend      BackendSettings
 	Version      string
-	Debug        bool
-	Server       DNSServerSettings `toml:"server"`
-	ResolvConfig ResolvSettings    `toml:"resolv"`
-	Redis        RedisSettings     `toml:"redis"`
-	Log          LogSettings       `toml:"log"`
-	Cache        CacheSettings     `toml:"cache"`
-	Hosts        HostsSettings     `toml:"hosts"`
-	Backend      BackendSettings   `toml:"backend"`
+	NumCPUs      int
 }
 
 type ResolvSettings struct {
-	ResolvFile string `toml:"resolv-file"`
+	//resolv-file = "/etc/resolv.conf"
+	ResolvFile string
+	//timeout = 5 # 5 seconds
+	//resolver timout 	return time.Duration(r.config.Timeout) * time.Second
 	Timeout    int
+	//ticker := time.NewTicker(time.Duration(settings.ResolvConfig.Interval) * time.Millisecond)
+	//interval = 20 # 20 milliseconds - it's our local resolver
 	Interval   int
 }
-
+/*
+		rTimeout: time.Duration(settings.Server.ReadTimeout) * time.Second,
+		wTimeout: time.Duration(settings.Server.WriteTimeout) * time.Second,
+ */
 type DNSServerSettings struct {
+	//host = "127.0.0.1"
 	Host string
+	//port = 5551
 	Port int
 	ReadTimeout int
 	WriteTimeout int
 }
 
-type RedisSettings struct {
-	Host     string
-	Port     int
-	DB       int
-	Password string
-}
-
-func (s RedisSettings) Addr() string {
-	return s.Host + ":" + strconv.Itoa(s.Port)
-}
-
 type LogSettings struct {
-	Stdout bool
-	File   string
-	Level  string
+	Stdout bool   //true
+	File   string // "./godns.log"
+	Level  string //"DEBUG"  #DEBUG | INFO |NOTICE | WARN | ERROR
 }
 
 func (ls LogSettings) LogLevel() int {
@@ -70,40 +68,63 @@ func (ls LogSettings) LogLevel() int {
 	return l
 }
 
+//cacheConfig.Backend memory
+//			Expire:   time.Duration(cacheConfig.Expire) * time.Second,
+
 type CacheSettings struct {
+	//backend = "memory"
 	Backend  string
+	//expire = 5 #s
 	Expire   int
+	//maxcount = 0 #If set zero. The Sum of cache itmes will be unlimit.
 	Maxcount int
 }
 
-type HostsSettings struct {
-	Enable          bool
-	HostsFile       string `toml:"host-file"`
-	RedisEnable     bool   `toml:"redis-enable"`
-	RedisKey        string `toml:"redis-key"`
-	TTL             uint32 `toml:"ttl"`
-	RefreshInterval uint32 `toml:"refresh-interval"`
-}
-
+/*	logger.Info("Core Backend Settings")
+	logger.Info("  FitResponseTime: %d ms", settings.Backend.FitResponseTime)
+	logger.Info("  HardRequestTimeout: %d ms", settings.Backend.HardRequestTimeout)
+	logger.Info("  SleepWhenDisabled: %d ms", settings.Backend.SleepWhenDisabled)
+*/
 type BackendSettings struct {
-	BackendResolvers []string `toml:"backend-recursive-resolvers"`
-	UseExclusively bool `toml:"use-exclusively"`
-	FitResponseTime int64 `toml:"fit-response-time"`
-	SleepWhenDisabled int64 `toml:"sleep-when-disabled"`
-	HardRequestTimeout int64 `toml:"hard-request-timeout"`
+	//backend-recursive-resolvers = [ "8.8.8.8:53" ]
+	BackendResolvers []string
+	//use-exclusively = true
+	UseExclusively bool
+	//time.Duration(settings.Backend.FitResponseTime)*time.Millisecond
+	//fit-response-time = 200 #ms
+	FitResponseTime int64
+	//sleep-when-disabled = 10000 #ms
+	SleepWhenDisabled int64
+	//	return net.DialTimeout(network, addr, time.Duration(settings.Backend.HardRequestTimeout) * time.Millisecond)
+	//hard-request-timeout = 200 #ms
+	HardRequestTimeout int64
+	//os.Getenv("SINKIT_SINKHOLE_IP")
+	SinkholeAddress string
+	//os.Getenv("SINKIT_ACCESS_TOKEN")
+	AccessToken string
+	//strconv.ParseBool(os.Getenv("SINKIT_RESOLVER_DISABLE_INFINISPAN"))
+	OraculumDisabled bool
+	URL string
+}
+//URL:
+//var coreApiServer = "http://"+os.Getenv("SINKIT_CORE_SERVER")+":"+os.Getenv("SINKIT_CORE_SERVER_PORT")+"/sinkit/rest/blacklist/dns"
+
+
+type Specification struct {
+	Debug   bool
+	Port    int
+	User    string
+	Users   []string
+	Rate    float32
+	Timeout time.Duration
 }
 
 func init() {
-
-	var configFile string
-
-	flag.StringVar(&configFile, "c", "godns.conf", "Look for godns toml-formatting config file in this directory")
-	flag.Parse()
-
-	if _, err := toml.DecodeFile(configFile, &settings); err != nil {
-		fmt.Printf("%s is not a valid toml config file\n", configFile)
-		fmt.Println(err)
-		os.Exit(1)
+	var s Specification
+	err := envconfig.Process("myapp", &s)
+	if err != nil {
+		log.Fatal(err.Error())
 	}
-
+	settings.Version = "0.5.0"
+	settings.NumCPUs = runtime.NumCPU()
 }
