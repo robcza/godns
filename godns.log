@@ -1,0 +1,8 @@
+2016/11/11 15:58:53 [INFO] godns 0.5.0 start
+2016/11/11 15:58:53 [INFO] godns 0.5.0 start
+2016/11/11 15:58:53 [INFO] Core Backend Settings
+2016/11/11 15:58:53 [INFO]   FitResponseTime: 500 ms
+2016/11/11 15:58:53 [INFO]   HardRequestTimeout: 600 ms
+2016/11/11 15:58:53 [INFO]   SleepWhenDisabled: 20000 ms
+2016/11/11 15:58:53 [INFO] Start udp listener on 127.0.0.1:5551
+2016/11/11 15:58:53 [INFO] Start tcp listener on 127.0.0.1:5551

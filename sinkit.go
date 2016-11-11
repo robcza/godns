@@ -29,7 +29,7 @@ func (e CoreError) Error() string {
 }
 
 func dialTimeout(network, addr string) (net.Conn, error) {
-	return net.DialTimeout(network, addr, time.Duration(settings.Backend.HardRequestTimeout) * time.Millisecond)
+	return net.DialTimeout(network, addr, time.Duration(settings.ORACULUM_API_TIMEOUT) * time.Millisecond)
 }
 
 var transport = http.Transport{
@@ -47,7 +47,7 @@ func dryAPICall(query string, clientAddress string, qname string) {
 	}
 	currentTime := int64(time.Now().Unix())
 	lastStamp := atomic.LoadInt64(&disabledSecondsTimestamp)
-	if ((currentTime - lastStamp)*1000 > settings.Backend.SleepWhenDisabled) {
+	if ((currentTime - lastStamp)*1000 > settings.ORACULUM_SLEEP_WHEN_DISABLED) {
 		logger.Debug("Doing dry API call...")
 		start := time.Now()
 		//Doesn't hurt IP
@@ -58,22 +58,22 @@ func dryAPICall(query string, clientAddress string, qname string) {
 			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 			return
 		}
-		if (elapsed > time.Duration(settings.Backend.FitResponseTime)*time.Millisecond) {
-			logger.Info("Core remains DISABLED. Gonna wait. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.Backend.FitResponseTime)*time.Millisecond)
+		if (elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond) {
+			logger.Info("Core remains DISABLED. Gonna wait. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond)
 			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 			return
 		}
 		logger.Debug("Core is now ENABLED")
 		atomic.StoreUint32(&coreDisabled, 0)
 	} else {
-		logger.Debug("Not enough time passed, waiting for another call. Elapsed: %s ms, Limit: %s ms", (currentTime - lastStamp)*1000, settings.Backend.SleepWhenDisabled)
+		logger.Debug("Not enough time passed, waiting for another call. Elapsed: %s ms, Limit: %s ms", (currentTime - lastStamp)*1000, settings.ORACULUM_SLEEP_WHEN_DISABLED)
 	}
 	return
 }
 
 func doAPICall(query string, clientAddress string, trimmedQname string) (value bool, err error) {
 	var bufferQuery bytes.Buffer
-	bufferQuery.WriteString(settings.Backend.URL)
+	bufferQuery.WriteString(settings.ORACULUM_URL)
 	bufferQuery.WriteString("/")
 	bufferQuery.WriteString(clientAddress)
 	bufferQuery.WriteString("/")
@@ -83,10 +83,10 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 	url := bufferQuery.String()
 	logger.Debug("URL:>", url)
 
-	//var jsonStr = []byte(`{"title":"Buy cheese and bread for breakfast."}`)
+	//var jsonStr = []byte(`{"Key":"Something Else"}`)
 	//req, err := http.NewRequest("GET", url, bytes.NewBuffer(jsonStr))
 	req, err := http.NewRequest("GET", url, nil)
-	req.Header.Set("X-sinkit-token", settings.Backend.AccessToken)
+	req.Header.Set(settings.ORACULUM_ACCESS_TOKEN_KEY, settings.ORACULUM_ACCESS_TOKEN_VALUE)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{
@@ -149,11 +149,11 @@ func sinkitBackendCall(query string, clientAddress string, trimmedQname string, 
 	key := hex.EncodeToString(keygen.Sum(nil))
 
 	answer, err := oraculumCache.Get(key)
-	if(err == nil) {
+	if (err == nil) {
 		return *answer
 	}
 
-	if(cacheOnly) {
+	if (cacheOnly) {
 		return false
 	}
 
@@ -166,10 +166,10 @@ func sinkitBackendCall(query string, clientAddress string, trimmedQname string, 
 		logger.Info("Core was DISABLED. Error: %s", err)
 		return false
 	}
-	if (elapsed > time.Duration(settings.Backend.FitResponseTime)*time.Millisecond) {
+	if (elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond) {
 		atomic.StoreUint32(&coreDisabled, 1)
 		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
-		logger.Info("Core was DISABLED. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.Backend.FitResponseTime)*time.Millisecond)
+		logger.Info("Core was DISABLED. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond)
 		return false
 	}
 
@@ -209,7 +209,7 @@ func sinkByIPAddress(msg *dns.Msg, clientAddress string, qname string, oraculumC
 
 func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCache Cache) {
 	// Don't bother contacting Infinispan Sinkit Core
-	if (settings.Backend.OraculumDisabled) {
+	if (settings.ORACULUM_DISABLED) {
 		logger.Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN TRUE\n")
 		return
 	} else {
@@ -221,14 +221,18 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 		logger.Debug("Core is DISABLED. Gonna call dryAPICall.")
 		//TODO qname or r for the dry run???
 		go dryAPICall(qname, clientAddress, qname)
-		sinkByIPAddress(msg, clientAddress, qname, oraculumCache, true)
+		if (settings.ORACULUM_IP_ADDRESSES_ENABLED) {
+			sinkByIPAddress(msg, clientAddress, qname, oraculumCache, true)
+		}
 		// We do not sinkhole based on IP address.
 		if (sinkByHostname(qname, clientAddress, oraculumCache, true)) {
 			logger.Debug("\n KARMTAG: %s GOES TO SINKHOLE!\n", msg.Answer)
 			sendToSinkhole(msg, qname)
 		}
 	} else {
-		sinkByIPAddress(msg, clientAddress, qname, oraculumCache, false)
+		if (settings.ORACULUM_IP_ADDRESSES_ENABLED) {
+			sinkByIPAddress(msg, clientAddress, qname, oraculumCache, false)
+		}
 		// We do not sinkhole based on IP address.
 		if (sinkByHostname(qname, clientAddress, oraculumCache, false)) {
 			logger.Debug("\n KARMTAG: %s GOES TO SINKHOLE!\n", msg.Answer)
@@ -244,7 +248,7 @@ func sendToSinkhole(msg *dns.Msg, qname string) {
 	buffer.WriteString("10	")
 	buffer.WriteString("IN	")
 	buffer.WriteString("A	")
-	buffer.WriteString(settings.Backend.SinkholeAddress)
+	buffer.WriteString(settings.SINKHOLE_ADDRESS)
 	sinkRecord, _ := dns.NewRR(buffer.String())
 	msg.Answer = []dns.RR{sinkRecord}
 	return

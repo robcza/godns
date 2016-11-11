@@ -24,7 +24,7 @@ type Resolver struct {
 }
 
 func (r *Resolver) Timeout() time.Duration {
-	return time.Duration(r.config.Timeout) * time.Second
+	return time.Duration(r.config.Timeout) * time.Millisecond
 }
 
 // Lookup will ask each nameserver in top-to-bottom fashion, starting a new request
@@ -69,7 +69,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr, orac
 		}
 	}
 
-	ticker := time.NewTicker(time.Duration(settings.ResolvConfig.Interval) * time.Millisecond)
+	ticker := time.NewTicker(time.Duration(settings.BACKEND_RESOLVER_TICK) * time.Millisecond)
 	defer ticker.Stop()
 	// Start lookup on each nameserver top-down, in every second
 	for _, nameserver := range r.Nameservers() {
@@ -99,9 +99,9 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr, orac
 // Namservers return the array of nameservers, with port number appended.
 // '#' in the name is treated as port separator, as with dnsmasq.
 func (r *Resolver) Nameservers() (ns []string) {
-	if (settings.Backend.UseExclusively) {
+	if (settings.BACKEND_RESOLVERS_EXCLUSIVELY) {
 		logger.Debug("Using exclusively these backend servers:\n")
-		for _, server := range settings.Backend.BackendResolvers {
+		for _, server := range settings.BACKEND_RESOLVERS {
 			logger.Debug(" Appending backend server: %s \n", server)
 			ns = append(ns, server)
 		}

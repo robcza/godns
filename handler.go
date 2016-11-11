@@ -32,32 +32,29 @@ func NewHandler() *GODNSHandler {
 
 	var (
 		clientConfig    *dns.ClientConfig
-		cacheConfig     CacheSettings
 		resolver        *Resolver
 		oraculumCache   Cache
 	)
 
-	resolvConfig := settings.ResolvConfig
-	clientConfig, err := dns.ClientConfigFromFile(resolvConfig.ResolvFile)
+	clientConfig, err := dns.ClientConfigFromFile(settings.RESOLV_CONF_FILE)
 	if err != nil {
-		logger.Warn(":%s is not a valid resolv.conf file\n", resolvConfig.ResolvFile)
+		logger.Warn(":%s is not a valid resolv.conf file\n", settings.RESOLV_CONF_FILE)
 		logger.Error(err.Error())
 		panic(err)
 	}
-	clientConfig.Timeout = resolvConfig.Timeout
+	clientConfig.Timeout = settings.BACKEND_RESOLVER_RW_TIMEOUT
 	resolver = &Resolver{clientConfig}
 
-	cacheConfig = settings.Cache
-	switch cacheConfig.Backend {
+	switch settings.ORACULUM_CACHE_BACKEND {
 	// TODO might have other implementations...
 	case "memory":
 		oraculumCache = &MemoryCache{
 			Backend:  make(map[string]Data),
-			Expire:   time.Duration(cacheConfig.Expire) * time.Second,
-			Maxcount: cacheConfig.Maxcount,
+			Expire:   time.Duration(settings.ORACULUM_CACHE_EXPIRE) * time.Millisecond,
+			Maxcount: settings.ORACULUM_CACHE_MAXCOUNT,
 		}
 	default:
-		logger.Error("Invalid cache backend %s", cacheConfig.Backend)
+		logger.Error("Invalid cache backend %s", settings.ORACULUM_CACHE_BACKEND)
 		panic("Invalid cache backend")
 	}
 

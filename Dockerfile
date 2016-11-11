@@ -22,7 +22,7 @@ RUN cd ${GOPATH}/src/${GODNSREPO}/ && \
     cd /home/sinkit/ && \
     ls -lah ./ && \
     rm -rf ${GOPATH}
-ADD godns.conf /home/sinkit/godns.conf
+#ADD godns.conf /home/sinkit/godns.conf
 
 USER root
 

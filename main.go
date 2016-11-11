@@ -23,10 +23,10 @@ func main() {
 	initLogger()
 
 	server := &Server{
-		host:     settings.Server.Host,
-		port:     settings.Server.Port,
-		rTimeout: time.Duration(settings.Server.ReadTimeout) * time.Second,
-		wTimeout: time.Duration(settings.Server.WriteTimeout) * time.Second,
+		host:     settings.BIND_HOST,
+		port:     settings.BIND_PORT,
+		rTimeout: time.Duration(settings.GODNS_READ_TIMEOUT) * time.Millisecond,
+		wTimeout: time.Duration(settings.GODNS_WRITE_TIMEOUT) * time.Millisecond,
 	}
 
 	server.Run()
@@ -34,9 +34,9 @@ func main() {
 	logger.Info("godns %s start", settings.Version)
 	logger.Info("godns %s start", settings.Version)
 	logger.Info("Core Backend Settings")
-	logger.Info("  FitResponseTime: %d ms", settings.Backend.FitResponseTime)
-	logger.Info("  HardRequestTimeout: %d ms", settings.Backend.HardRequestTimeout)
-	logger.Info("  SleepWhenDisabled: %d ms", settings.Backend.SleepWhenDisabled)
+	logger.Info("  FitResponseTime: %d ms", settings.ORACULUM_API_FIT_TIMEOUT)
+	logger.Info("  HardRequestTimeout: %d ms", settings.ORACULUM_API_TIMEOUT)
+	logger.Info("  SleepWhenDisabled: %d ms", settings.ORACULUM_SLEEP_WHEN_DISABLED)
 
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt)
@@ -55,16 +55,16 @@ func main() {
 func initLogger() {
 	logger = NewLogger()
 
-	if settings.Log.Stdout {
+	if settings.LOG_STDOUT {
 		logger.SetLogger("console", nil)
 	}
 
-	if settings.Log.File != "" {
-		config := map[string]interface{}{"file": settings.Log.File}
+	if settings.LOG_FILE != "" {
+		config := map[string]interface{}{"file": settings.LOG_FILE}
 		logger.SetLogger("file", config)
 	}
 
-	logger.SetLevel(settings.Log.LogLevel())
+	logger.SetLevel(settings.LogLevel())
 }
 
 func init() {
