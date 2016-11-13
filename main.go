@@ -17,7 +17,7 @@ var (
 func main() {
 	// Profiler
 	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
+		log.Println(http.ListenAndServe(settings.BIND_HOST + ":6060", nil))
 	}()
 
 	initLogger()
