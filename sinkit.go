@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"crypto/md5"
 	"encoding/hex"
+	"strconv"
 )
 
 type Sinkhole struct {
@@ -119,7 +120,7 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 		logger.Debug("There has been an error with unmarshalling the response: %s", body)
 		return false, err
 	}
-	fmt.Printf("\nSINKHOLE RETURNED from Core[%s]\n", sinkhole.Sinkhole)
+	logger.Debug("\nSINKHOLE RETURNED from Core[%s]\n", sinkhole.Sinkhole)
 
 	return true, nil
 }
@@ -127,16 +128,20 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 
 func sinkitBackendCall(query string, clientAddress string, trimmedQname string, oraculumCache Cache, cacheOnly bool) (bool) {
 	//TODO This is just a provisional check. We need to think it over...
-	if (len(query) > 250) {
-		fmt.Printf("Query is too long: %d\n", len(query))
+	if (len(query) > 250 || len(query) < 3) {
+		logger.Warn("Query is too long or too short: %d\n", len(query))
 		return false
 	}
-	if (len(clientAddress) < 3) {
-		fmt.Printf("Client address is too short: %s\n", clientAddress)
+	if(strings.ContainsAny(trimmedQname, " ,*") || strings.ContainsAny(query, " ,*")) {
+		logger.Warn("trimmedQname `%s' or query `%s' contained a space, comma or an asterisk.\n", trimmedQname, query)
+		return false
+	}
+	if (len(clientAddress) < 3 || len(clientAddress) > 41) {
+		logger.Warn("Client address is too short or too long %s\n", clientAddress)
 		return false
 	}
 	if (len(trimmedQname) < 3 || len(trimmedQname) > 250) {
-		fmt.Printf("Query FQDN is likely invalid: %s\n", trimmedQname)
+		logger.Warn("Query FQDN is likely invalid: %s\n", trimmedQname)
 		return false
 	}
 
@@ -245,7 +250,8 @@ func sendToSinkhole(msg *dns.Msg, qname string) {
 	var buffer bytes.Buffer
 	buffer.WriteString(qname)
 	buffer.WriteString("	")
-	buffer.WriteString("10	")
+	buffer.WriteString(strconv.Itoa(settings.SINKHOLE_TTL))
+	buffer.WriteString("	")
 	buffer.WriteString("IN	")
 	buffer.WriteString("A	")
 	buffer.WriteString(settings.SINKHOLE_ADDRESS)

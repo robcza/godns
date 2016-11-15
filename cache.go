@@ -121,12 +121,4 @@ func (c *MemoryCache) Full() bool {
 	}
 	return c.Length() >= c.Maxcount
 }
-/*
-func KeyGen(q Question) string {
-	h := md5.New()
-	h.Write([]byte(q.String()))
-	x := h.Sum(nil)
-	key := fmt.Sprintf("%x", x)
-	return key
-}
-*/
+

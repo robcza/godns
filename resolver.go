@@ -27,6 +27,8 @@ func (r *Resolver) Timeout() time.Duration {
 	return time.Duration(r.config.Timeout) * time.Millisecond
 }
 
+var nameservers []string
+
 // Lookup will ask each nameserver in top-to-bottom fashion, starting a new request
 // in every second, and return as early as possible (have an answer).
 // It returns an error if no request has succeeded.
@@ -72,7 +74,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr, orac
 	ticker := time.NewTicker(time.Duration(settings.BACKEND_RESOLVER_TICK) * time.Millisecond)
 	defer ticker.Stop()
 	// Start lookup on each nameserver top-down, in every second
-	for _, nameserver := range r.Nameservers() {
+	for _, nameserver := range nameservers {
 		wg.Add(1)
 		go L(nameserver)
 		// but exit early, if we have an answer
@@ -88,12 +90,15 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr, orac
 	wg.Wait()
 	select {
 	case r := <-res:
-	//TODO: Redundant?
 		processCoreCom(r, qname, clientAddress, oraculumCache)
 		return r, nil
 	default:
-		return nil, ResolvError{qname, net, r.Nameservers()}
+		return nil, ResolvError{qname, net, nameservers}
 	}
+}
+
+func (r *Resolver) init() {
+	nameservers = r.Nameservers()
 }
 
 // Namservers return the array of nameservers, with port number appended.

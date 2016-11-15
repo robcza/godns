@@ -15,14 +15,15 @@ var (
 )
 
 func main() {
-	// Profiler
-	go func() {
-		log.Println(http.ListenAndServe(settings.BIND_HOST + ":6060", nil))
-	}()
-
 	initLogger()
+	// Profiler
+	if (settings.LogLevel() == LevelDebug) {
+		go func() {
+			log.Println(http.ListenAndServe(settings.BIND_HOST + ":6060", nil))
+		}()
+	}
 
-	server := &Server{
+	server := &DNSServer{
 		host:     settings.BIND_HOST,
 		port:     settings.BIND_PORT,
 		rTimeout: time.Duration(settings.GODNS_READ_TIMEOUT) * time.Millisecond,
@@ -68,5 +69,5 @@ func initLogger() {
 }
 
 func init() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	runtime.GOMAXPROCS(settings.NUM_OF_CPUS)
 }

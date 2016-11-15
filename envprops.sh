@@ -24,12 +24,14 @@ export SINKIT_BIND_PORT=5551
 # int, 0 means runtime.NumCPU()
 export SINKIT_NUM_OF_CPUS=0
 
-
-
 # GoDNS server lookup r/w timeout for queries
 # int, milliseconds
 export SINKIT_GODNS_READ_TIMEOUT=5000
 export SINKIT_GODNS_WRITE_TIMEOUT=5000
+
+# Default buffer size to use to read incoming UDP messages. If not set
+# int, it defaults to MinMsgSize (512 B).
+export SINKIT_GODNS_UDP_PACKET_SIZE=600
 
 # resolv.conf file, source of additional resolvers
 # string
@@ -44,7 +46,7 @@ export SINKIT_BACKEND_RESOLVER_RW_TIMEOUT=5000
 export SINKIT_BACKEND_RESOLVER_TICK=20
 
 # Backend recursive dns resolvers added before resolv.conf
-# string, comma separated list of IP:PORT
+# string, comma separated list of IP:PORT, Google is only for a demonstration.
 export SINKIT_BACKEND_RESOLVERS="8.8.8.8:53"
 
 # Backend recursive dns resolvers from SINKIT_BACKEND_RESOLVERS are the
@@ -93,7 +95,12 @@ export SINKIT_ORACULUM_ACCESS_TOKEN_VALUE="kjdqgkjhgdajdsakgqq"
 
 # Sinkhole address. We don't use the one returned from
 # Oraculum at the moment.
+# string, IPv4/IPv6 address
 export SINKIT_SINKHOLE_ADDRESS="127.0.0.1"
+
+# TTL for A record returned as a sinkhole address
+# int
+export SINKIT_SINKHOLE_TTL=10
 
 # Skip IP address calls to Oraculum REST API
 # bool

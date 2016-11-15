@@ -9,8 +9,8 @@ import (
 
 const (
 	notIPQuery = 0
-	_IP4Query  = 4
-	_IP6Query  = 6
+	_IP4Query = 4
+	_IP6Query = 6
 )
 
 type Question struct {
@@ -46,17 +46,19 @@ func NewHandler() *GODNSHandler {
 	resolver = &Resolver{clientConfig}
 
 	switch settings.ORACULUM_CACHE_BACKEND {
-	// TODO might have other implementations...
-	case "memory":
-		oraculumCache = &MemoryCache{
-			Backend:  make(map[string]Data),
-			Expire:   time.Duration(settings.ORACULUM_CACHE_EXPIRE) * time.Millisecond,
-			Maxcount: settings.ORACULUM_CACHE_MAXCOUNT,
-		}
-	default:
-		logger.Error("Invalid cache backend %s", settings.ORACULUM_CACHE_BACKEND)
-		panic("Invalid cache backend")
+		// TODO might have other implementations...
+		case "memory":
+			oraculumCache = &MemoryCache{
+				Backend:  make(map[string]Data),
+				Expire:   time.Duration(settings.ORACULUM_CACHE_EXPIRE) * time.Millisecond,
+				Maxcount: settings.ORACULUM_CACHE_MAXCOUNT,
+			}
+		default:
+			logger.Error("Invalid cache backend %s", settings.ORACULUM_CACHE_BACKEND)
+			panic("Invalid cache backend")
 	}
+
+	resolver.init()
 
 	return &GODNSHandler{resolver, oraculumCache}
 }
@@ -75,56 +77,15 @@ func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 	logger.Debug("Question: %s", Q.String())
 	logger.Debug("w.RemoteAddr().String(): %s", w.RemoteAddr().String())
 
-	//karm cache
-	//IPQuery := h.isIPQuery(q)
-
-	//karm cache
-	// Only query cache when qtype == 'A'|'AAAA' , qclass == 'IN'
-	/*key := KeyGen(Q)
-	if IPQuery > 0 {
-		mesg, err := h.cache.Get(key)
-		if err != nil {
-			if mesg, err = h.negCache.Get(key); err != nil {
-				logger.Debug("%s didn't hit cache", Q.String())
-			} else {
-				logger.Debug("%s hit negative cache", Q.String())
-				dns.HandleFailed(w, req)
-				return
-			}
-		} else {
-			logger.Debug("%s hit cache", Q.String())
-			// we need this copy against concurrent modification of Id
-			msg := *mesg
-			msg.Id = req.Id
-			w.WriteMsg(&msg)
-			return
-		}
-	}*/
-
 	mesg, err := h.resolver.Lookup(Net, req, w.RemoteAddr(), h.oraculumCache)
 
 	if err != nil {
 		logger.Warn("Resolve query error %s", err)
 		dns.HandleFailed(w, req)
-
-		// cache the failure, too!
-		/*karm cache
-		if err = h.negCache.Set(key, nil); err != nil {
-			logger.Warn("Set %s negative cache failed: %v", Q.String(), err)
-		}*/
 		return
 	}
 
 	w.WriteMsg(mesg)
-
-	/*karm cache
-	if IPQuery > 0 && len(mesg.Answer) > 0 {
-		err = h.cache.Set(key, mesg)
-		if err != nil {
-			logger.Warn("Set %s cache failed: %s", Q.String(), err.Error())
-		}
-		logger.Debug("Insert %s into cache", Q.String())
-	}*/
 }
 
 func (h *GODNSHandler) DoTCP(w dns.ResponseWriter, req *dns.Msg) {
