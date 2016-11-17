@@ -111,12 +111,17 @@ func (r *Resolver) Nameservers() (ns []string) {
 			ns = append(ns, server)
 		}
 	} else {
+		for _, server := range settings.BACKEND_RESOLVERS {
+			logger.Debug(" Appending backend server: %s \n", server)
+			ns = append(ns, server)
+		}
 		for _, server := range r.config.Servers {
 			if i := strings.IndexByte(server, '#'); i > 0 {
 				server = server[:i] + ":" + server[i+1:]
 			} else {
 				server = server + ":" + r.config.Port
 			}
+			logger.Debug(" Appending backend server: %s \n", server)
 			ns = append(ns, server)
 		}
 	}
