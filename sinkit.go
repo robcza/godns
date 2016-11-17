@@ -55,16 +55,16 @@ func dryAPICall(query string, clientAddress string, qname string) {
 		_, err := doAPICall(trimmedQname, clientAddress, trimmedQname)
 		elapsed := time.Since(start)
 		if (err != nil) {
-			logger.Info("Core remains DISABLED. Gonna wait. Error: %s", err)
+			logger.Error("Core remains DISABLED. Gonna wait. Error: %s", err)
 			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 			return
 		}
 		if (elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond) {
-			logger.Info("Core remains DISABLED. Gonna wait. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond)
+			logger.Error("Core remains DISABLED. Gonna wait. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond)
 			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 			return
 		}
-		logger.Debug("Core is now ENABLED")
+		logger.Error("Core is now ENABLED")
 		atomic.StoreUint32(&coreDisabled, 0)
 	} else {
 		logger.Debug("Not enough time passed, waiting for another call. Elapsed: %s ms, Limit: %s ms", (currentTime - lastStamp)*1000, settings.ORACULUM_SLEEP_WHEN_DISABLED)
@@ -168,13 +168,13 @@ func sinkitBackendCall(query string, clientAddress string, trimmedQname string, 
 	if (err != nil) {
 		atomic.StoreUint32(&coreDisabled, 1)
 		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
-		logger.Info("Core was DISABLED. Error: %s", err)
+		logger.Error("Core was DISABLED. Error: %s", err)
 		return false
 	}
 	if (elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond) {
 		atomic.StoreUint32(&coreDisabled, 1)
 		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
-		logger.Info("Core was DISABLED. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond)
+		logger.Error("Core was DISABLED. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond)
 		return false
 	}
 
