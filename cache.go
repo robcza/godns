@@ -1,12 +1,8 @@
 package main
 
 import (
-	//"crypto/md5"
-	//"fmt"
 	"sync"
 	"time"
-
-	//"github.com/miekg/dns"
 )
 
 type KeyNotFound struct {

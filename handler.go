@@ -38,7 +38,7 @@ func NewHandler() *GODNSHandler {
 
 	clientConfig, err := dns.ClientConfigFromFile(settings.RESOLV_CONF_FILE)
 	if err != nil {
-		logger.Warn(":%s is not a valid resolv.conf file\n", settings.RESOLV_CONF_FILE)
+		logger.Error(":%s is not a valid resolv.conf file\n", settings.RESOLV_CONF_FILE)
 		logger.Error(err.Error())
 		panic(err)
 	}
