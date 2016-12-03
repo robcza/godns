@@ -105,3 +105,28 @@ export SINKIT_SINKHOLE_TTL=10
 # Skip IP address calls to Oraculum REST API
 # bool
 export SINKIT_ORACULUM_IP_ADDRESSES_ENABLED="false"
+
+# Resolver could be deployed "in the cloud", thus serving many
+# different clients with various settings for logging/blocking
+# malicious domains. The Sinkit Core (Oraculum) cluster determines
+# the client's setting by it IP origin. If deployed as "local resolver"
+# it communicates with the Sinkit Core as a single settings client.
+#
+# cloud - Oraculum cache counts source IPs into the key, could be accessed
+# by clients demanding various settings for logging/blocking malicious domains
+#
+# local - Oraculum cache doesn't use source IP in the key, resolver
+# is accessed only by clients with s single setting for logging/blocking
+# malicious domains.
+# bool
+export SINKIT_LOCAL_RESOLVER="false"
+
+# Resolver, when deployed with SINKIT_LOCAL_RESOLVER="true", talks to the
+# Oraculum core server via https or http 2.0 protocols. It is expected to
+# authenticate with client certificate.
+# string, base64 encoded PEM certificate
+export SINKIT_CA_CRT_BASE64=""
+# string, base64 encoded PEM certificate
+export SINKIT_CLIENT_CRT_BASE64=""
+# string, base64 encoded PEM certificate
+export SINKIT_CLIENT_KEY_BASE64=""
