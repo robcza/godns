@@ -124,9 +124,21 @@ export SINKIT_LOCAL_RESOLVER="false"
 # Resolver, when deployed with SINKIT_LOCAL_RESOLVER="true", talks to the
 # Oraculum core server via https or http 2.0 protocols. It is expected to
 # authenticate with client certificate.
-# string, base64 encoded PEM certificate
+# string, base64 encoded PEM certificate, mandatory if SINKIT_LOCAL_RESOLVER="true"
 export SINKIT_CA_CRT_BASE64=""
-# string, base64 encoded PEM certificate
+# string, base64 encoded PEM certificate, mandatory if SINKIT_LOCAL_RESOLVER="true"
 export SINKIT_CLIENT_CRT_BASE64=""
-# string, base64 encoded PEM certificate
+# string, base64 encoded PEM certificate, mandatory if SINKIT_LOCAL_RESOLVER="true"
 export SINKIT_CLIENT_KEY_BASE64=""
+# Testing purposes only, enable insecure certificates
+# bool
+export SINKIT_INSECURE_SKIP_VERIFY="false"
+# The GoDNS instance might know the ID of the client
+# using it. Reporting this ID to the Oraculum speeds up client configuration
+# loopkup because subnets checking might be skipped.
+# The attribute is meaningless if many different clients with various Oraculum side
+# settings based on their subnets are using the GoDNS instance.
+# int, could be empty even if SINKIT_LOCAL_RESOLVER="true"
+export SINKIT_CLIENT_ID=""
+# string
+export SINKIT_CLIENT_ID_HEADER="X-client-id"

@@ -14,6 +14,8 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"strconv"
+	"crypto/tls"
+	"golang.org/x/net/http2"
 )
 
 type Sinkhole struct {
@@ -33,11 +35,29 @@ func dialTimeout(network, addr string) (net.Conn, error) {
 	return net.DialTimeout(network, addr, time.Duration(settings.ORACULUM_API_TIMEOUT) * time.Millisecond)
 }
 
-var transport = http.Transport{
-	Dial: dialTimeout,
-}
-var coreDisabled uint32 = 1
+var transportHTTP11 http.Transport
+var transportHTTP2 http2.Transport
+
+var coreDisabled uint32 = 0
 var disabledSecondsTimestamp int64 = 0
+
+func init() {
+	if (settings.LOCAL_RESOLVER) {
+		transportHTTP2 = http2.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: settings.INSECURE_SKIP_VERIFY,
+				NextProtos: []string{"h2"},
+				MinVersion: tls.VersionTLS12,
+				Certificates: []tls.Certificate{credentials.clientKeyPair},
+				ClientCAs: credentials.caCertPool,
+			},
+		}
+	} else {
+		transportHTTP11 = http.Transport{
+			Dial: dialTimeout,
+		}
+	}
+}
 
 func dryAPICall(query string, clientAddress string, qname string) {
 	var trimmedQname = strings.TrimSuffix(qname, ".")
@@ -48,7 +68,7 @@ func dryAPICall(query string, clientAddress string, qname string) {
 	}
 	currentTime := int64(time.Now().Unix())
 	lastStamp := atomic.LoadInt64(&disabledSecondsTimestamp)
-	if ((currentTime - lastStamp)*1000 > settings.ORACULUM_SLEEP_WHEN_DISABLED) {
+	if ((currentTime - lastStamp) * 1000 > settings.ORACULUM_SLEEP_WHEN_DISABLED) {
 		logger.Debug("Doing dry API call...")
 		start := time.Now()
 		//Doesn't hurt IP
@@ -59,15 +79,15 @@ func dryAPICall(query string, clientAddress string, qname string) {
 			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 			return
 		}
-		if (elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond) {
-			logger.Error("Core remains DISABLED. Gonna wait. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond)
+		if (elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT) * time.Millisecond) {
+			logger.Error("Core remains DISABLED. Gonna wait. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT) * time.Millisecond)
 			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 			return
 		}
 		logger.Error("Core is now ENABLED")
 		atomic.StoreUint32(&coreDisabled, 0)
 	} else {
-		logger.Debug("Not enough time passed, waiting for another call. Elapsed: %s ms, Limit: %s ms", (currentTime - lastStamp)*1000, settings.ORACULUM_SLEEP_WHEN_DISABLED)
+		logger.Debug("Not enough time passed, waiting for another call. Elapsed: %s ms, Limit: %s ms", (currentTime - lastStamp) * 1000, settings.ORACULUM_SLEEP_WHEN_DISABLED)
 	}
 	return
 }
@@ -89,10 +109,23 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 	req, err := http.NewRequest("GET", url, nil)
 	req.Header.Set(settings.ORACULUM_ACCESS_TOKEN_KEY, settings.ORACULUM_ACCESS_TOKEN_VALUE)
 	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{
-		Transport: &transport,
+	if (settings.CLIENT_ID > 0) {
+		req.Header.Set(settings.CLIENT_ID_HEADER, strconv.Itoa(settings.CLIENT_ID))
 	}
+
+	var client http.Client
+	if (settings.LOCAL_RESOLVER) {
+		client = http.Client{
+			Transport: &transportHTTP2,
+			Timeout: time.Duration(settings.ORACULUM_API_TIMEOUT) * time.Millisecond,
+		}
+	} else {
+		client = http.Client{
+			Transport: &transportHTTP11,
+			Timeout: time.Duration(settings.ORACULUM_API_TIMEOUT) * time.Millisecond,
+		}
+	}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Debug("There has been an error with backend.")
@@ -125,14 +158,13 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 	return true, nil
 }
 
-
 func sinkitBackendCall(query string, clientAddress string, trimmedQname string, oraculumCache Cache, cacheOnly bool) (bool) {
 	//TODO This is just a provisional check. We need to think it over...
 	if (len(query) > 250 || len(query) < 3) {
 		logger.Warn("Query is too long or too short: %d\n", len(query))
 		return false
 	}
-	if(strings.ContainsAny(trimmedQname, " ,*") || strings.ContainsAny(query, " ,*")) {
+	if (strings.ContainsAny(trimmedQname, " ,*") || strings.ContainsAny(query, " ,*")) {
 		logger.Warn("trimmedQname `%s' or query `%s' contained a space, comma or an asterisk.\n", trimmedQname, query)
 		return false
 	}
@@ -148,7 +180,9 @@ func sinkitBackendCall(query string, clientAddress string, trimmedQname string, 
 	keygen := md5.New()
 	var buffer bytes.Buffer
 	buffer.WriteString(query)
-	buffer.WriteString(clientAddress)
+	if (!settings.LOCAL_RESOLVER) {
+		buffer.WriteString(clientAddress)
+	}
 	buffer.WriteString(trimmedQname)
 	keygen.Write(buffer.Bytes())
 	key := hex.EncodeToString(keygen.Sum(nil))
@@ -171,10 +205,10 @@ func sinkitBackendCall(query string, clientAddress string, trimmedQname string, 
 		logger.Error("Core was DISABLED. Error: %s", err)
 		return false
 	}
-	if (elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond) {
+	if (elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT) * time.Millisecond) {
 		atomic.StoreUint32(&coreDisabled, 1)
 		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
-		logger.Error("Core was DISABLED. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond)
+		logger.Error("Core was DISABLED. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT) * time.Millisecond)
 		return false
 	}
 
@@ -202,9 +236,9 @@ func sinkByIPAddress(msg *dns.Msg, clientAddress string, qname string, oraculumC
 				logger.Debug("KARMTAG: value matches: %s\n", vals[i])
 				// Length in bytes, not runes. Shorter doesn't make sense.
 				// We ditch .root-servers.net.
-				if (len(vals) > i+1 && len(vals[i+1]) > 3 && !strings.HasSuffix(vals[i+1], ".root-servers.net.")) {
-					logger.Debug("KARMTAG: to send to Core: %s\n", vals[i+1])
-					go sinkitBackendCall(strings.TrimSuffix(vals[i+1], "."), clientAddress, trimmedQname, oraculumCache, cacheOnly)
+				if (len(vals) > i + 1 && len(vals[i + 1]) > 3 && !strings.HasSuffix(vals[i + 1], ".root-servers.net.")) {
+					logger.Debug("KARMTAG: to send to Core: %s\n", vals[i + 1])
+					go sinkitBackendCall(strings.TrimSuffix(vals[i + 1], "."), clientAddress, trimmedQname, oraculumCache, cacheOnly)
 				}
 				break
 			}
