@@ -1,10 +1,12 @@
 FROM fedora:24
 MAINTAINER Michal Karm Babacek <karm@email.cz>
-ENV DEPS        unbound go supervisor wget unzip git wget
+ENV DEPS        unbound libevent go python-pip wget unzip git wget sed gawk bc procps
 ENV GOPATH      /home/sinkit/go
 ENV GODNSREPO   github.com/Karm/godns
 
-RUN dnf -y update && dnf -y install ${DEPS} && dnf clean all
+RUN dnf -y update && dnf -y install ${DEPS} && dnf clean all && \
+    pip install supervisor && \
+    pip install superlance
 
 RUN useradd -s /sbin/nologin sinkit
 
@@ -22,7 +24,6 @@ RUN cd ${GOPATH}/src/${GODNSREPO}/ && \
     cd /home/sinkit/ && \
     ls -lah ./ && \
     rm -rf ${GOPATH}
-#ADD godns.conf /home/sinkit/godns.conf
 
 USER root
 
@@ -31,12 +32,13 @@ RUN setcap 'cap_net_bind_service=+ep' /home/sinkit/godns
 
 # Unbound
 ADD unbound.conf /etc/unbound/unbound.conf
-RUN wget -O /etc/unbound/named.cache ftp://ftp.internic.net./domain/named.cache
 
 # Supervisor
 ADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
+ADD start.sh /usr/bin/start.sh
+
 EXPOSE 53/tcp
 EXPOSE 53/udp
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf", "-n"]
+CMD ["/usr/bin/start.sh"]
