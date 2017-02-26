@@ -31,7 +31,7 @@ export SINKIT_GODNS_WRITE_TIMEOUT=5000
 
 # Default buffer size to use to read incoming UDP messages. If not set
 # int, it defaults to MinMsgSize (512 B).
-export SINKIT_GODNS_UDP_PACKET_SIZE=600
+export SINKIT_GODNS_UDP_PACKET_SIZE=65535
 
 # resolv.conf file, source of additional resolvers
 # string

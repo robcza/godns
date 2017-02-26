@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 	"bytes"
-	"net"
 	"github.com/miekg/dns"
 	"io/ioutil"
 	"encoding/json"
@@ -31,15 +30,14 @@ func (e CoreError) Error() string {
 	return fmt.Sprintf("%v: %v", e.When, e.What)
 }
 
-func dialTimeout(network, addr string) (net.Conn, error) {
-	return net.DialTimeout(network, addr, time.Duration(settings.ORACULUM_API_TIMEOUT) * time.Millisecond)
-}
+var (
+	transportHTTP11 http.Transport
+	transportHTTP2 http2.Transport
+	client *http.Client
 
-var transportHTTP11 http.Transport
-var transportHTTP2 http2.Transport
-
-var coreDisabled uint32 = 0
-var disabledSecondsTimestamp int64 = 0
+	coreDisabled uint32 = 0
+	disabledSecondsTimestamp int64 = 0
+)
 
 func init() {
 	if (settings.LOCAL_RESOLVER) {
@@ -52,9 +50,17 @@ func init() {
 				ClientCAs: credentials.caCertPool,
 			},
 		}
+		client = &http.Client{
+			Transport: &transportHTTP2,
+			Timeout: time.Duration(settings.ORACULUM_API_TIMEOUT) * time.Millisecond,
+		}
 	} else {
 		transportHTTP11 = http.Transport{
-			Dial: dialTimeout,
+			MaxIdleConnsPerHost: 20,
+		}
+		client = &http.Client{
+			Transport: &transportHTTP11,
+			Timeout: time.Duration(settings.ORACULUM_API_TIMEOUT) * time.Millisecond,
 		}
 	}
 }
@@ -111,19 +117,6 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 	req.Header.Set("Content-Type", "application/json")
 	if (settings.CLIENT_ID > 0) {
 		req.Header.Set(settings.CLIENT_ID_HEADER, strconv.Itoa(settings.CLIENT_ID))
-	}
-
-	var client http.Client
-	if (settings.LOCAL_RESOLVER) {
-		client = http.Client{
-			Transport: &transportHTTP2,
-			Timeout: time.Duration(settings.ORACULUM_API_TIMEOUT) * time.Millisecond,
-		}
-	} else {
-		client = http.Client{
-			Transport: &transportHTTP11,
-			Timeout: time.Duration(settings.ORACULUM_API_TIMEOUT) * time.Millisecond,
-		}
 	}
 
 	resp, err := client.Do(req)

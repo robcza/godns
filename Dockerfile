@@ -1,14 +1,17 @@
 FROM fedora:24
 MAINTAINER Michal Karm Babacek <karm@email.cz>
-ENV DEPS        unbound libevent go python-pip wget unzip git wget sed gawk bc procps
+ENV DEPS        unbound libevent python-pip wget unzip git wget sed gawk bc tar procps
 ENV GOPATH      /home/sinkit/go
+ENV GOROOT      /opt/go
 ENV GODNSREPO   github.com/Karm/godns
+ENV PATH        ${GOROOT}/bin/:${PATH}
+ENV GODIST      https://storage.googleapis.com/golang/go1.8.linux-amd64.tar.gz
 
 RUN dnf -y update && dnf -y install ${DEPS} && dnf clean all && \
     pip install supervisor && \
-    pip install superlance
-
-RUN useradd -s /sbin/nologin sinkit
+    pip install superlance && \
+    useradd -s /sbin/nologin sinkit && \
+    cd /opt && wget ${GODIST} && tar -xvf *.tar.gz && rm -rf *.tar.gz
 
 USER sinkit
 
