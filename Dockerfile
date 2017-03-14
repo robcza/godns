@@ -13,35 +13,56 @@ RUN dnf -y update && dnf -y install ${DEPS} && dnf clean all && \
     useradd -s /sbin/nologin sinkit && \
     cd /opt && wget ${GODIST} && tar -xvf *.tar.gz && rm -rf *.tar.gz
 
-USER sinkit
-
-RUN mkdir -p ${GOPATH}/src/${GODNSREPO}
-
-# GoDNS
-ADD *.go ${GOPATH}/src/${GODNSREPO}/
-RUN cd ${GOPATH}/src/${GODNSREPO}/ && \
-    go get . && \
-    go build && \
-    cp godns /home/sinkit/ && \
-    ls -lah ./ && \
-    cd /home/sinkit/ && \
-    ls -lah ./ && \
-    rm -rf ${GOPATH}
-
-USER root
-
-RUN ls -lah /home/sinkit/
-RUN setcap 'cap_net_bind_service=+ep' /home/sinkit/godns
+RUN mkdir /tmp/protoc-temp && \
+    cd /tmp/protoc-temp && \
+    wget -q https://github.com/google/protobuf/releases/download/v3.0.0/protoc-3.0.0-linux-x86_64.zip && \
+    unzip protoc-3.0.0-linux-x86_64.zip && \
+    mv ./bin/protoc ${GOROOT}/bin/ && \
+    chmod a+rx ${GOROOT}/bin/protoc && \
+    cd / && \
+    rm -rf /tmp/protoc-temp
 
 # Unbound
 ADD unbound.conf /etc/unbound/unbound.conf
 
 # Supervisor
 ADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
 ADD start.sh /usr/bin/start.sh
+
+USER sinkit
+
+RUN mkdir -p ${GOPATH}/src/${GODNSREPO}
+
+#debug
+RUN go get -u github.com/derekparker/delve/cmd/dlv && ls -lah ${GOPATH}/bin && cp ${GOPATH}/bin/dlv /home/sinkit/
+ADD ./data/hosts.csv /hosts.csv
+
+# GoDNS
+ADD *.proto ${GOPATH}/src/${GODNSREPO}/
+
+RUN cd ${GOPATH}/src/${GODNSREPO}/ && \
+    go get -u github.com/golang/protobuf/protoc-gen-go && \
+    protoc -I=${GOPATH}/src/${GODNSREPO} --plugin=${GOPATH}/bin/protoc-gen-go --go_out=${GOPATH}/src/${GODNSREPO} ${GOPATH}/src/${GODNSREPO}/sinkit-cache.proto && \
+    ls -lah ./
+
+ADD *.go ${GOPATH}/src/${GODNSREPO}/
+
+RUN cd ${GOPATH}/src/${GODNSREPO}/ && \
+    go get . && \
+    go build && \
+    cp godns /home/sinkit/
+    # ls -lah ./ && \
+    # cd /home/sinkit/ && \
+    # ls -lah ./ && \
+    # rm -rf ${GOPATH}
+
+USER root
+RUN setcap 'cap_net_bind_service=+ep' /home/sinkit/godns
 
 EXPOSE 53/tcp
 EXPOSE 53/udp
+EXPOSE 2345
+
+#CMD ["/home/sinkit/dlv", "debug", "github.com/Karm/godns", "--headless", "--listen=:2345", "--log"]
 
 CMD ["/usr/bin/start.sh"]

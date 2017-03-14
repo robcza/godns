@@ -2,15 +2,15 @@ package main
 
 import (
 	"net"
+	"time"
 
 	"github.com/miekg/dns"
-	"time"
 )
 
 const (
 	notIPQuery = 0
-	_IP4Query = 4
-	_IP6Query = 6
+	_IP4Query  = 4
+	_IP6Query  = 6
 )
 
 type Question struct {
@@ -31,9 +31,9 @@ type GODNSHandler struct {
 func NewHandler() *GODNSHandler {
 
 	var (
-		clientConfig    *dns.ClientConfig
-		resolver        *Resolver
-		oraculumCache   Cache
+		clientConfig  *dns.ClientConfig
+		resolver      *Resolver
+		oraculumCache Cache
 	)
 
 	clientConfig, err := dns.ClientConfigFromFile(settings.RESOLV_CONF_FILE)
@@ -46,19 +46,22 @@ func NewHandler() *GODNSHandler {
 	resolver = &Resolver{clientConfig}
 
 	switch settings.ORACULUM_CACHE_BACKEND {
-		// TODO might have other implementations...
-		case "memory":
-			oraculumCache = &MemoryCache{
-				Backend:  make(map[string]Data),
-				Expire:   time.Duration(settings.ORACULUM_CACHE_EXPIRE) * time.Millisecond,
-				Maxcount: settings.ORACULUM_CACHE_MAXCOUNT,
-			}
-		default:
-			logger.Error("Invalid cache backend %s", settings.ORACULUM_CACHE_BACKEND)
-			panic("Invalid cache backend")
+	// TODO might have other implementations...
+	case "memory":
+		oraculumCache = &MemoryCache{
+			Backend:  make(map[string]Data),
+			Expire:   time.Duration(settings.ORACULUM_CACHE_EXPIRE) * time.Millisecond,
+			Maxcount: settings.ORACULUM_CACHE_MAXCOUNT,
+		}
+	default:
+		logger.Error("Invalid cache backend %s", settings.ORACULUM_CACHE_BACKEND)
+		panic("Invalid cache backend")
 	}
 
 	resolver.init()
+
+	FillTestData()
+	go StartCoreClient(oraculumCache)
 
 	return &GODNSHandler{resolver, oraculumCache}
 }

@@ -37,7 +37,7 @@ func (e SerializerError) Error() string {
 
 type Data struct {
 	OraculumResponse *bool
-	Expire time.Time
+	Expire           time.Time
 }
 
 type Cache interface {
@@ -82,7 +82,7 @@ func (c *MemoryCache) Set(key string, oraculumResponse *bool) error {
 
 	expire := time.Now().Add(c.Expire)
 	data := Data{oraculumResponse, expire}
-	logger.Debug("Cache Set: key: %s, value: %t, expires at: %s", key, oraculumResponse, expire.Format(time.RFC3339))
+	// logger.Debug("Cache Set: key: %s, value: %t, expires at: %s", key, oraculumResponse, expire.Format(time.RFC3339))
 	c.mu.Lock()
 	c.Backend[key] = data
 	c.mu.Unlock()
@@ -117,4 +117,3 @@ func (c *MemoryCache) Full() bool {
 	}
 	return c.Length() >= c.Maxcount
 }
-
