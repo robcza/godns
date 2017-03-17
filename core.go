@@ -42,7 +42,7 @@ func downloadCache() *CoreCache {
 }
 
 func updateCache(cache Cache, coreCache *CoreCache) {
-	// FIXME: replace content of cache, remove missing
+	cache.Clear()
 	for _, r := range coreCache.Record {
 		// FIXME : do in bigger slices not one by one
 		cache.Set(*r.Key, r.Value)
@@ -57,7 +57,7 @@ func readFile() *CoreCache {
 	}
 
 	logDebugMemory("Before reading proto")
-	cacheData := &CoreCache{}
+	var cacheData *CoreCache
 	if err := proto.Unmarshal(in, cacheData); err != nil {
 		log.Fatalln("Failed to parse cache data:", err)
 	}

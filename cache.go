@@ -46,6 +46,7 @@ type Cache interface {
 	Exists(key string) bool
 	Remove(key string)
 	Length() int
+	Clear()
 }
 
 type MemoryCache struct {
@@ -116,4 +117,10 @@ func (c *MemoryCache) Full() bool {
 		return false
 	}
 	return c.Length() >= c.Maxcount
+}
+
+func (c *MemoryCache) Clear() {
+	c.mu.Lock()
+	c.Backend = make(map[string]Data)
+	c.mu.Unlock()
 }
