@@ -42,11 +42,14 @@ func downloadCache() *CoreCache {
 }
 
 func updateCache(cache Cache, coreCache *CoreCache) {
-	cache.Clear()
+	logDebugMemory("Before cache update")
+	newCache := make(map[string]Data)
+	expire := time.Now().Add(time.Duration(settings.ORACULUM_CACHE_EXPIRE) * time.Millisecond)
 	for _, r := range coreCache.Record {
-		// FIXME : do in bigger slices not one by one
-		cache.Set(*r.Key, r.Value)
+		newCache[*r.Key] = Data{r.Value, expire}
 	}
+	logDebugMemory("After cache prepared")
+	cache.Replace(newCache)
 	logDebugMemory("After cache update")
 }
 
@@ -57,7 +60,7 @@ func readFile() *CoreCache {
 	}
 
 	logDebugMemory("Before reading proto")
-	var cacheData *CoreCache
+	cacheData := &CoreCache{}
 	if err := proto.Unmarshal(in, cacheData); err != nil {
 		log.Fatalln("Failed to parse cache data:", err)
 	}

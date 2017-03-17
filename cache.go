@@ -46,7 +46,7 @@ type Cache interface {
 	Exists(key string) bool
 	Remove(key string)
 	Length() int
-	Clear()
+	Replace(map[string]Data)
 }
 
 type MemoryCache struct {
@@ -90,6 +90,14 @@ func (c *MemoryCache) Set(key string, oraculumResponse *bool) error {
 	return nil
 }
 
+// Replace whole content of cache in atomic operation
+func (c *MemoryCache) Replace(cache map[string]Data) {
+	logger.Debug("Cache Replace")
+	c.mu.Lock()
+	c.Backend = cache
+	c.mu.Unlock()
+}
+
 func (c *MemoryCache) Remove(key string) {
 	logger.Debug("Cache Remove: key: %s was removed.", key)
 	c.mu.Lock()
@@ -117,10 +125,4 @@ func (c *MemoryCache) Full() bool {
 		return false
 	}
 	return c.Length() >= c.Maxcount
-}
-
-func (c *MemoryCache) Clear() {
-	c.mu.Lock()
-	c.Backend = make(map[string]Data)
-	c.mu.Unlock()
 }
