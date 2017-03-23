@@ -46,7 +46,7 @@ func updateCache(cache SinklistCache, coreCache *CoreCache) {
 	logDebugMemory("Before cache update")
 	newCache := make(map[string]bool)
 	for _, r := range coreCache.Record {
-		newCache[*r.Key] = *r.Value
+		newCache[r.GetKey()] = r.GetValue()
 	}
 	logDebugMemory("After cache prepared")
 	cache.Replace(newCache)

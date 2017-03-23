@@ -5,8 +5,8 @@ import (
 )
 
 type SinklistCache interface {
-	Get(key string) (OraculumResponse bool, err error)
-	Set(key string, OraculumResponse bool) error
+	Get(key string) (sendToSinkhole bool, err error)
+	Set(key string, sendToSinkhole bool) error
 	Exists(key string) bool
 	Remove(key string)
 	Length() int
@@ -32,10 +32,10 @@ func (c *SinklistMemoryCache) Get(key string) (bool, error) {
 	return data, nil
 }
 
-func (c *SinklistMemoryCache) Set(key string, oraculumResponse bool) error {
-	logger.Debug("SinklistCache Set: key: %s, value: %t", key, oraculumResponse)
+func (c *SinklistMemoryCache) Set(key string, sendToSinkhole bool) error {
+	logger.Debug("SinklistCache Set: key: %s, value: %t", key, sendToSinkhole)
 	c.mu.Lock()
-	c.Backend[key] = oraculumResponse
+	c.Backend[key] = sendToSinkhole
 	c.mu.Unlock()
 	return nil
 }

@@ -238,9 +238,9 @@ func isHostnameWhitelisted(qname string, whitelistCache SinklistCache) bool {
 	buffer.WriteString(strings.TrimSuffix(qname, "."))
 	keygen.Write(buffer.Bytes())
 	key := hex.EncodeToString(keygen.Sum(nil))
-	whitelisted, err := whitelistCache.Get(key)
+	sendToSinkhole, err := whitelistCache.Get(key)
 	if err == nil {
-		return whitelisted
+		return !sendToSinkhole
 	}
 	return false
 }
