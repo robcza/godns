@@ -36,13 +36,13 @@ func (e SerializerError) Error() string {
 }
 
 type Data struct {
-	OraculumResponse *bool
+	OraculumResponse bool
 	Expire           time.Time
 }
 
 type Cache interface {
-	Get(key string) (OraculumResponse *bool, err error)
-	Set(key string, OraculumResponse *bool) error
+	Get(key string) (OraculumResponse bool, err error)
+	Set(key string, OraculumResponse bool) error
 	Exists(key string) bool
 	Remove(key string)
 	Length() int
@@ -56,26 +56,26 @@ type MemoryCache struct {
 	mu       sync.RWMutex
 }
 
-func (c *MemoryCache) Get(key string) (*bool, error) {
+func (c *MemoryCache) Get(key string) (bool, error) {
 	logger.Debug("Cache Get: called for key: %s", key)
 	c.mu.RLock()
 	data, ok := c.Backend[key]
 	c.mu.RUnlock()
 	if !ok {
 		logger.Debug("Cache Get: key: %s was not found.", key)
-		return nil, KeyNotFound{key}
+		return false, KeyNotFound{key}
 	}
 
 	if data.Expire.Before(time.Now()) {
 		logger.Debug("Cache Get: key: %s expired at %s. Returning nil.", key, data.Expire.Format(time.RFC3339))
 		c.Remove(key)
-		return nil, KeyExpired{key}
+		return false, KeyExpired{key}
 	}
 	logger.Debug("Cache Get: key: %s found value: %t", key, data.OraculumResponse)
 	return data.OraculumResponse, nil
 }
 
-func (c *MemoryCache) Set(key string, oraculumResponse *bool) error {
+func (c *MemoryCache) Set(key string, oraculumResponse bool) error {
 	if c.Full() && !c.Exists(key) {
 		logger.Debug("Cache Set: key: %s, Cache is full.", key)
 		return CacheIsFull{}

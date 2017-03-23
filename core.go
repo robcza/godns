@@ -46,7 +46,7 @@ func updateCache(cache Cache, coreCache *CoreCache) {
 	newCache := make(map[string]Data)
 	expire := time.Now().Add(time.Duration(settings.ORACULUM_CACHE_EXPIRE) * time.Millisecond)
 	for _, r := range coreCache.Record {
-		newCache[*r.Key] = Data{r.Value, expire}
+		newCache[*r.Key] = Data{*r.Value, expire}
 	}
 	logDebugMemory("After cache prepared")
 	cache.Replace(newCache)

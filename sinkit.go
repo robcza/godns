@@ -175,7 +175,7 @@ func sinkitBackendCall(query string, clientAddress string, trimmedQname string, 
 
 	answer, err := oraculumCache.Get(key)
 	if err == nil {
-		return *answer
+		return answer
 	}
 
 	if cacheOnly {
@@ -198,7 +198,7 @@ func sinkitBackendCall(query string, clientAddress string, trimmedQname string, 
 		return false
 	}
 
-	oraculumCache.Set(key, &goToSinkhole)
+	oraculumCache.Set(key, goToSinkhole)
 
 	return goToSinkhole
 }
