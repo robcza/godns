@@ -23,15 +23,16 @@ func init() {
 
 }
 
-func StartCoreClient(cache Cache) {
 	timer = time.NewTicker(time.Minute * 30)
+// StartCoreClient starts periodic download of cache files from CORE
+func StartCoreClient(whitelistCache SinklistCache) {
 	for {
-		updateFromCore(cache)
+		updateFromCore(whitelistCache)
 		<-timer.C
 	}
 }
 
-func updateFromCore(cache Cache) {
+func updateFromCore(cache SinklistCache) {
 	coreCache := downloadCache()
 	updateCache(cache, coreCache)
 }
@@ -41,12 +42,11 @@ func downloadCache() *CoreCache {
 	return readFile()
 }
 
-func updateCache(cache Cache, coreCache *CoreCache) {
+func updateCache(cache SinklistCache, coreCache *CoreCache) {
 	logDebugMemory("Before cache update")
-	newCache := make(map[string]Data)
-	expire := time.Now().Add(time.Duration(settings.ORACULUM_CACHE_EXPIRE) * time.Millisecond)
+	newCache := make(map[string]bool)
 	for _, r := range coreCache.Record {
-		newCache[*r.Key] = Data{*r.Value, expire}
+		newCache[*r.Key] = *r.Value
 	}
 	logDebugMemory("After cache prepared")
 	cache.Replace(newCache)
@@ -54,6 +54,7 @@ func updateCache(cache Cache, coreCache *CoreCache) {
 }
 
 func readFile() *CoreCache {
+	logDebugMemory("Before loading cache file")
 	in, err := ioutil.ReadFile(cacheFile)
 	if err != nil {
 		log.Fatalln("Error reading file:", err)

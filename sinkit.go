@@ -209,6 +209,17 @@ func sinkByHostname(qname string, clientAddress string, oraculumCache Cache, cac
 	return sinkitBackendCall(trimmedQname, clientAddress, trimmedQname, oraculumCache, cacheOnly)
 }
 
+func isHostnameWhitelisted(qname string, whitelistCache SinklistCache) bool {
+	trimmedQname := strings.TrimSuffix(qname, ".")
+	// whitelist is global, no client address needed
+	key := RequestHash(trimmedQname, trimmedQname, "")
+	whitelisted, err := whitelistCache.Get(key)
+	if err == nil {
+		return whitelisted
+	}
+	return false
+}
+
 // We do not sinkhole here, the side effect is that CNAMEs slip through.
 func sinkByIPAddress(msg *dns.Msg, clientAddress string, qname string, oraculumCache Cache, cacheOnly bool) {
 	var trimmedQname = strings.TrimSuffix(qname, ".")
@@ -232,7 +243,7 @@ func sinkByIPAddress(msg *dns.Msg, clientAddress string, qname string, oraculumC
 	}
 }
 
-func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCache Cache) {
+func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCache Cache, whitelistCache SinklistCache) {
 	// Don't bother contacting Infinispan Sinkit Core
 	if settings.ORACULUM_DISABLED {
 		logger.Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN TRUE\n")
@@ -241,6 +252,12 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 		logger.Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN FALSE or N/A\n")
 	}
 	logger.Debug("\n KARMTAG: Resolved to: %s\n", msg.Answer)
+
+	// Skip whitelisted names
+	if isHostnameWhitelisted(qname, whitelistCache) {
+		logger.Debug("\n KARMTAG: Record is whitelisted")
+		return
+	}
 
 	if atomic.LoadUint32(&coreDisabled) == 1 {
 		logger.Debug("Core is DISABLED. Gonna call dryAPICall.")
