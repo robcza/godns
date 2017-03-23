@@ -35,7 +35,7 @@ RUN mkdir -p ${GOPATH}/src/${GODNSREPO}
 
 #debug
 RUN go get -u github.com/derekparker/delve/cmd/dlv && ls -lah ${GOPATH}/bin && cp ${GOPATH}/bin/dlv /home/sinkit/
-ADD ./data/hosts.csv /hosts.csv
+# ADD ./data/hosts.csv /hosts.csv
 
 # GoDNS
 ADD *.proto ${GOPATH}/src/${GODNSREPO}/
@@ -63,7 +63,7 @@ EXPOSE 53/tcp
 EXPOSE 53/udp
 EXPOSE 2345
 
-COPY sinkit-cache.bin "/tmp/whitelist.bin"
+COPY data/sinkit-cache.bin "/tmp/whitelist.bin"
 
 #CMD ["/home/sinkit/dlv", "debug", "github.com/Karm/godns", "--headless", "--listen=:2345", "--log"]
 
