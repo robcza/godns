@@ -250,9 +250,8 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 	if settings.ORACULUM_DISABLED {
 		logger.Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN TRUE\n")
 		return
-	} else {
-		logger.Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN FALSE or N/A\n")
 	}
+	logger.Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN FALSE or N/A\n")
 	logger.Debug("\n KARMTAG: Resolved to: %s\n", msg.Answer)
 
 	// Skip whitelisted names
@@ -261,27 +260,19 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 		return
 	}
 
-	if atomic.LoadUint32(&coreDisabled) == 1 {
+	coreDisabledNow := atomic.LoadUint32(&coreDisabled) == 1
+	if coreDisabledNow {
 		logger.Debug("Core is DISABLED. Gonna call dryAPICall.")
 		//TODO qname or r for the dry run???
 		go dryAPICall(qname, clientAddress, qname)
-		if settings.ORACULUM_IP_ADDRESSES_ENABLED {
-			sinkByIPAddress(msg, clientAddress, qname, oraculumCache, true)
-		}
-		// We do not sinkhole based on IP address.
-		if sinkByHostname(qname, clientAddress, oraculumCache, true) {
-			logger.Debug("\n KARMTAG: %s GOES TO SINKHOLE!\n", msg.Answer)
-			sendToSinkhole(msg, qname)
-		}
-	} else {
-		if settings.ORACULUM_IP_ADDRESSES_ENABLED {
-			sinkByIPAddress(msg, clientAddress, qname, oraculumCache, false)
-		}
-		// We do not sinkhole based on IP address.
-		if sinkByHostname(qname, clientAddress, oraculumCache, false) {
-			logger.Debug("\n KARMTAG: %s GOES TO SINKHOLE!\n", msg.Answer)
-			sendToSinkhole(msg, qname)
-		}
+	}
+	if settings.ORACULUM_IP_ADDRESSES_ENABLED {
+		sinkByIPAddress(msg, clientAddress, qname, oraculumCache, coreDisabledNow)
+	}
+	// We do not sinkhole based on IP address.
+	if sinkByHostname(qname, clientAddress, oraculumCache, coreDisabledNow) {
+		logger.Debug("\n KARMTAG: %s GOES TO SINKHOLE!\n", msg.Answer)
+		sendToSinkhole(msg, qname)
 	}
 }
 
