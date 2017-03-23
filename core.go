@@ -16,16 +16,16 @@ import (
 
 var (
 	timer     *time.Ticker
-	cacheFile = "/tmp/cache.dat"
+	cacheFile = "/tmp/whitelist.bin"
 )
 
 func init() {
 
 }
 
-	timer = time.NewTicker(time.Minute * 30)
 // StartCoreClient starts periodic download of cache files from CORE
 func StartCoreClient(whitelistCache SinklistCache) {
+	timer = time.NewTicker(time.Minute * 1)
 	for {
 		updateFromCore(whitelistCache)
 		<-timer.C

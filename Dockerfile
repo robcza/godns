@@ -63,6 +63,12 @@ EXPOSE 53/tcp
 EXPOSE 53/udp
 EXPOSE 2345
 
+COPY sinkit-cache.bin "/tmp/whitelist.bin"
+
 #CMD ["/home/sinkit/dlv", "debug", "github.com/Karm/godns", "--headless", "--listen=:2345", "--log"]
 
 CMD ["/usr/bin/start.sh"]
+
+#gcvis
+RUN cd ${GOPATH}/src && go get -u github.com/davecheney/gcvis && cp ${GOPATH}/bin/gcvis /home/sinkit/ && \
+    sed -i 's~command=/home/sinkit/godns~command=/home/sinkit/gcvis -o=false -p 2345 -i "0.0.0.0" /home/sinkit/godns~' /etc/supervisor/conf.d/supervisord.conf
