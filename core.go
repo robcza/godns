@@ -34,6 +34,10 @@ const (
 
 // StartCoreClient starts periodic download of cache files from CORE
 func StartCoreClient(whitelist SinklistCache, ioc SinklistCache, customlist SinklistCache) {
+	tryLoadCacheFile(whitelist, whitelistCacheFile)
+	tryLoadCacheFile(ioc, iocCacheFile)
+	tryLoadCacheFile(customlist, customListCacheFile)
+
 	whitelistReq := prepareRequest(whitelistURI)
 	iocReq := prepareRequest(iocURI)
 	customListReq := prepareRequest(customListURI)
@@ -113,6 +117,15 @@ func updateCache(cache SinklistCache, coreCache *CoreCache) {
 	// logDebugMemory("After cache prepared")
 	cache.Replace(newCache)
 	// logDebugMemory("After cache update")
+}
+
+func tryLoadCacheFile(cache SinklistCache, file string) {
+	cacheData, err := readCacheFile(file)
+	if err != nil {
+		logger.Info("Encountered error processing file "+file+" :", err)
+		return
+	}
+	updateCache(cache, cacheData)
 }
 
 func readCacheFile(file string) (*CoreCache, error) {
