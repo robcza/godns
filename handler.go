@@ -24,18 +24,22 @@ func (q *Question) String() string {
 }
 
 type GODNSHandler struct {
-	resolver       *Resolver
-	oraculumCache  Cache
-	whitelistCache SinklistCache
+	resolver            *Resolver
+	oraculumCache       Cache
+	whitelistCache      SinklistCache
+	iocCache            SinklistCache
+	customListCacheFile SinklistCache
 }
 
 func NewHandler() *GODNSHandler {
 
 	var (
-		clientConfig   *dns.ClientConfig
-		resolver       *Resolver
-		oraculumCache  Cache
-		whitelistCache SinklistCache
+		clientConfig        *dns.ClientConfig
+		resolver            *Resolver
+		oraculumCache       Cache
+		whitelistCache      SinklistCache
+		iocCache            SinklistCache
+		customListCacheFile SinklistCache
 	)
 
 	clientConfig, err := dns.ClientConfigFromFile(settings.RESOLV_CONF_FILE)
@@ -64,12 +68,20 @@ func NewHandler() *GODNSHandler {
 		Backend: make(map[string]bool),
 	}
 
+	iocCache = &SinklistMemoryCache{
+		Backend: make(map[string]bool),
+	}
+
+	customListCacheFile = &SinklistMemoryCache{
+		Backend: make(map[string]bool),
+	}
+
 	resolver.init()
 
 	// FillTestData()
-	go StartCoreClient(whitelistCache)
+	go StartCoreClient(whitelistCache, iocCache, customListCacheFile)
 
-	return &GODNSHandler{resolver, oraculumCache, whitelistCache}
+	return &GODNSHandler{resolver, oraculumCache, whitelistCache, iocCache, customListCacheFile}
 }
 
 func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
