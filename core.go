@@ -78,6 +78,9 @@ func downloadCache(req *http.Request, cacheFile string) (*CoreCache, error) {
 			return err
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("Core status code %d", resp.StatusCode)
+		}
 		data, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -132,7 +135,6 @@ func readCacheFile(file string) (*CoreCache, error) {
 	// logDebugMemory("Before loading cache file")
 	in, err := ioutil.ReadFile(file)
 	if err != nil {
-		logger.Error("Error reading file:", err)
 		return nil, err
 	}
 
