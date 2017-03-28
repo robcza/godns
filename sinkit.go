@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -31,39 +30,12 @@ func (e CoreError) Error() string {
 }
 
 var (
-	transportHTTP11 *http.Transport
-	// transportHTTP2  http2.Transport
-	transportHTTP2 *http.Transport
-	client         *http.Client
 
 	coreDisabled             uint32 = 0
 	disabledSecondsTimestamp int64  = 0
 )
 
 func init() {
-	if settings.LOCAL_RESOLVER {
-		transportHTTP2 = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: settings.INSECURE_SKIP_VERIFY,
-				NextProtos:         []string{"h2"},
-				MinVersion:         tls.VersionTLS12,
-				Certificates:       []tls.Certificate{credentials.clientKeyPair},
-				ClientCAs:          credentials.caCertPool,
-			},
-		}
-		client = &http.Client{
-			Transport: transportHTTP2,
-			Timeout:   time.Duration(settings.ORACULUM_API_TIMEOUT) * time.Millisecond,
-		}
-	} else {
-		transportHTTP11 = &http.Transport{
-			MaxIdleConnsPerHost: 20,
-		}
-		client = &http.Client{
-			Transport: transportHTTP11,
-			Timeout:   time.Duration(settings.ORACULUM_API_TIMEOUT) * time.Millisecond,
-		}
-	}
 }
 
 func dryAPICall(query string, clientAddress string, qname string) {
@@ -120,7 +92,7 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 		req.Header.Set(settings.CLIENT_ID_HEADER, strconv.Itoa(settings.CLIENT_ID))
 	}
 
-	resp, err := client.Do(req)
+	resp, err := CoreClient.Do(req)
 	if err != nil {
 		logger.Debug("There has been an error with backend.")
 		return false, err
