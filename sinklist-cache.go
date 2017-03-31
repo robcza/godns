@@ -4,6 +4,14 @@ import (
 	"sync"
 )
 
+// ListCache contains 3 SinklistCache objects for storing Core data
+type ListCache struct {
+	Whitelist  SinklistCache
+	Customlist SinklistCache
+	Ioclist    SinklistCache
+}
+
+// SinklistCache represents one of caches of Core data - whitelist, customlist, ioclist
 type SinklistCache interface {
 	Get(key string) (sendToSinkhole bool, err error)
 	Set(key string, sendToSinkhole bool) error
@@ -13,9 +21,26 @@ type SinklistCache interface {
 	Replace(cache map[string]bool)
 }
 
+// SinklistMemoryCache is SinklistCache with memory backend
 type SinklistMemoryCache struct {
 	Backend map[string]bool
 	mu      sync.RWMutex
+}
+
+// NewListCache creates object for storing whitelist/customlist/ioclist cache
+func NewListCache() *ListCache {
+	return &ListCache{
+		Whitelist:  NewSinklistMemoryCache(),
+		Customlist: NewSinklistMemoryCache(),
+		Ioclist:    NewSinklistMemoryCache(),
+	}
+}
+
+// NewSinklistMemoryCache creates new SinklistCache with memory backend
+func NewSinklistMemoryCache() *SinklistMemoryCache {
+	return &SinklistMemoryCache{
+		Backend: make(map[string]bool),
+	}
 }
 
 func (c *SinklistMemoryCache) Get(key string) (bool, error) {

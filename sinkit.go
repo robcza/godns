@@ -204,20 +204,7 @@ func sinkByIPAddress(msg *dns.Msg, clientAddress string, qname string, oraculumC
 	}
 }
 
-func isHostnameWhitelisted(qname string, whitelistCache SinklistCache) bool {
-	var buffer bytes.Buffer
-	keygen := md5.New()
-	buffer.WriteString(strings.TrimSuffix(qname, "."))
-	keygen.Write(buffer.Bytes())
-	key := hex.EncodeToString(keygen.Sum(nil))
-	sendToSinkhole, err := whitelistCache.Get(key)
-	if err == nil {
-		return !sendToSinkhole
-	}
-	return false
-}
-
-func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCache Cache, whitelistCache SinklistCache) {
+func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCache Cache, caches *ListCache) {
 	// Don't bother contacting Infinispan Sinkit Core
 	if settings.ORACULUM_DISABLED {
 		logger.Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN TRUE\n")
@@ -226,9 +213,41 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 	logger.Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN FALSE or N/A\n")
 	logger.Debug("\n KARMTAG: Resolved to: %s\n", msg.Answer)
 
-	// Skip whitelisted names
-	if isHostnameWhitelisted(qname, whitelistCache) {
+	qnameMD5 := qnameToMD5(qname)
+
+	if settings.LOCAL_RESOLVER {
+		// check customlist
+		blocked, err := caches.Customlist.Get(qnameMD5)
+		if err == nil {
+			if blocked {
+				logger.Debug("\n KARMTAG: Record %s is blocked in customlist", qname)
+				sendToSinkhole(msg, qname)
+			} else {
+				logger.Debug("\n KARMTAG: Record %s is allowed in customlist", qname)
+			}
+			// FIXME : log
+			go dryAPICall(qname, clientAddress, qname)
+			return
+		}
+	}
+
+	_, err := caches.Whitelist.Get(qnameMD5)
+	if err == nil {
+		// Skip whitelisted names
 		logger.Debug("\n KARMTAG: Record %s is whitelisted", qname)
+		return
+	}
+
+	if settings.LOCAL_RESOLVER {
+		// check ioclist
+		blocked, err := caches.Ioclist.Get(qnameMD5)
+		if err == nil && blocked {
+			logger.Debug("\n KARMTAG: Record %s is blocked by ioclist", qname)
+			sendToSinkhole(msg, qname)
+		}
+		// FIXME : log
+		go dryAPICall(qname, clientAddress, qname)
+		// for LR end here
 		return
 	}
 
@@ -271,6 +290,14 @@ func RequestHash(query string, trimmedQname string, clientAddress string) string
 		buffer.WriteString(clientAddress)
 	}
 	buffer.WriteString(trimmedQname)
+	keygen.Write(buffer.Bytes())
+	return hex.EncodeToString(keygen.Sum(nil))
+}
+
+func qnameToMD5(qname string) string {
+	var buffer bytes.Buffer
+	keygen := md5.New()
+	buffer.WriteString(strings.TrimSuffix(qname, "."))
 	keygen.Write(buffer.Bytes())
 	return hex.EncodeToString(keygen.Sum(nil))
 }

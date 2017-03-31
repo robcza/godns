@@ -32,7 +32,7 @@ var nameservers []string
 // Lookup will ask each nameserver in top-to-bottom fashion, starting a new request
 // in every second, and return as early as possible (have an answer).
 // It returns an error if no request has succeeded.
-func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr, oraculumCache Cache, whitelistCache SinklistCache) (message *dns.Msg, err error) {
+func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr, oraculumCache Cache, caches *ListCache) (message *dns.Msg, err error) {
 	c := &dns.Client{
 		Net:          net,
 		ReadTimeout:  r.Timeout(),
@@ -84,7 +84,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr, orac
 		// but exit early, if we have an answer
 		select {
 		case r := <-res:
-			processCoreCom(r, qname, clientAddress, oraculumCache, whitelistCache)
+			processCoreCom(r, qname, clientAddress, oraculumCache, caches)
 			return r, nil
 		case <-ticker.C:
 			continue
@@ -94,7 +94,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr, orac
 	wg.Wait()
 	select {
 	case r := <-res:
-		processCoreCom(r, qname, clientAddress, oraculumCache, whitelistCache)
+		processCoreCom(r, qname, clientAddress, oraculumCache, caches)
 		return r, nil
 	default:
 		return nil, ResolvError{qname, net, nameservers}

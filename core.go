@@ -33,10 +33,10 @@ const (
 )
 
 // StartCoreClient starts periodic download of cache files from CORE
-func StartCoreClient(whitelist SinklistCache, ioc SinklistCache, customlist SinklistCache) {
-	tryLoadCacheFile(whitelist, whitelistCacheFile)
-	tryLoadCacheFile(ioc, iocCacheFile)
-	tryLoadCacheFile(customlist, customListCacheFile)
+func StartCoreClient(listCache *ListCache) {
+	tryLoadCacheFile(listCache.Whitelist, whitelistCacheFile)
+	tryLoadCacheFile(listCache.Ioclist, iocCacheFile)
+	tryLoadCacheFile(listCache.Customlist, customListCacheFile)
 
 	whitelistReq := prepareRequest(whitelistURI)
 	iocReq := prepareRequest(iocURI)
@@ -52,11 +52,11 @@ func StartCoreClient(whitelist SinklistCache, ioc SinklistCache, customlist Sink
 	for {
 		select {
 		case <-whitelistTimer.C:
-			updateCoreCache(whitelist, whitelistReq, whitelistCacheFile)
+			updateCoreCache(listCache.Whitelist, whitelistReq, whitelistCacheFile)
 		case <-iocTimer.C:
-			updateCoreCache(ioc, iocReq, iocCacheFile)
+			updateCoreCache(listCache.Ioclist, iocReq, iocCacheFile)
 		case <-customlistTimer.C:
-			updateCoreCache(customlist, customListReq, customListCacheFile)
+			updateCoreCache(listCache.Customlist, customListReq, customListCacheFile)
 		}
 	}
 }

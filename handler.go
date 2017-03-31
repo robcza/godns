@@ -24,22 +24,18 @@ func (q *Question) String() string {
 }
 
 type GODNSHandler struct {
-	resolver            *Resolver
-	oraculumCache       Cache
-	whitelistCache      SinklistCache
-	iocCache            SinklistCache
-	customListCacheFile SinklistCache
+	resolver      *Resolver
+	oraculumCache Cache
+	listCache     *ListCache
 }
 
 func NewHandler() *GODNSHandler {
 
 	var (
-		clientConfig        *dns.ClientConfig
-		resolver            *Resolver
-		oraculumCache       Cache
-		whitelistCache      SinklistCache
-		iocCache            SinklistCache
-		customListCacheFile SinklistCache
+		clientConfig  *dns.ClientConfig
+		resolver      *Resolver
+		oraculumCache Cache
+		listCache     *ListCache
 	)
 
 	clientConfig, err := dns.ClientConfigFromFile(settings.RESOLV_CONF_FILE)
@@ -64,24 +60,14 @@ func NewHandler() *GODNSHandler {
 		panic("Invalid cache backend")
 	}
 
-	whitelistCache = &SinklistMemoryCache{
-		Backend: make(map[string]bool),
-	}
-
-	iocCache = &SinklistMemoryCache{
-		Backend: make(map[string]bool),
-	}
-
-	customListCacheFile = &SinklistMemoryCache{
-		Backend: make(map[string]bool),
-	}
+	listCache = NewListCache()
 
 	resolver.init()
 
 	// FillTestData()
-	go StartCoreClient(whitelistCache, iocCache, customListCacheFile)
+	go StartCoreClient(listCache)
 
-	return &GODNSHandler{resolver, oraculumCache, whitelistCache, iocCache, customListCacheFile}
+	return &GODNSHandler{resolver, oraculumCache, listCache}
 }
 
 func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
@@ -98,7 +84,7 @@ func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 	logger.Debug("Question: %s", Q.String())
 	logger.Debug("w.RemoteAddr().String(): %s", w.RemoteAddr().String())
 
-	mesg, err := h.resolver.Lookup(Net, req, w.RemoteAddr(), h.oraculumCache, h.whitelistCache)
+	mesg, err := h.resolver.Lookup(Net, req, w.RemoteAddr(), h.oraculumCache, h.listCache)
 
 	if err != nil {
 		logger.Warn("Resolve query error %s", err)
