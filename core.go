@@ -32,15 +32,32 @@ const (
 	md5HeaderKey = "X-file-md5"
 )
 
-// StartCoreClient starts periodic download of cache files from CORE
+// StartCoreClient prepares caches and schedules periodic updates
 func StartCoreClient(listCache *ListCache) {
-	tryLoadCacheFile(listCache.Whitelist, whitelistCacheFile)
-	tryLoadCacheFile(listCache.Ioclist, iocCacheFile)
-	tryLoadCacheFile(listCache.Customlist, customListCacheFile)
+	if settings.LOCAL_RESOLVER {
+		ensureCachePrepared(listCache.Customlist, prepareRequest(customListURI), customListCacheFile)
+		ensureCachePrepared(listCache.Whitelist, prepareRequest(whitelistURI), whitelistCacheFile)
+		ensureCachePrepared(listCache.Ioclist, prepareRequest(iocURI), iocCacheFile)
+	} else {
+		tryLoadCacheFile(listCache.Whitelist, whitelistCacheFile)
+	}
 
-	whitelistReq := prepareRequest(whitelistURI)
-	iocReq := prepareRequest(iocURI)
-	customListReq := prepareRequest(customListURI)
+	// separate goroutine to keep caches updated
+	go waitUpdateCaches(listCache)
+}
+
+func waitUpdateCaches(listCache *ListCache) {
+	var (
+		iocReq        *http.Request
+		customListReq *http.Request
+		whitelistReq  *http.Request
+	)
+
+	whitelistReq = prepareRequest(whitelistURI)
+	if settings.LOCAL_RESOLVER {
+		iocReq = prepareRequest(iocURI)
+		customListReq = prepareRequest(customListURI)
+	}
 
 	whitelistTimer := time.NewTicker(time.Minute * time.Duration(settings.CACHE_REFRESH_WHITELIST))
 	defer whitelistTimer.Stop()
@@ -54,19 +71,35 @@ func StartCoreClient(listCache *ListCache) {
 		case <-whitelistTimer.C:
 			updateCoreCache(listCache.Whitelist, whitelistReq, whitelistCacheFile)
 		case <-iocTimer.C:
-			updateCoreCache(listCache.Ioclist, iocReq, iocCacheFile)
+			if settings.LOCAL_RESOLVER {
+				updateCoreCache(listCache.Ioclist, iocReq, iocCacheFile)
+			}
 		case <-customlistTimer.C:
-			updateCoreCache(listCache.Customlist, customListReq, customListCacheFile)
+			if settings.LOCAL_RESOLVER {
+				updateCoreCache(listCache.Customlist, customListReq, customListCacheFile)
+			}
 		}
 	}
 }
 
-func updateCoreCache(cache SinklistCache, req *http.Request, cacheFile string) {
+func ensureCachePrepared(cache SinklistCache, req *http.Request, cacheFile string) {
+	if tryLoadCacheFile(cache, cacheFile) == nil {
+		return
+	}
+	for updateCoreCache(cache, req, cacheFile) != nil {
+		logger.Error("Could not download cache, retrying")
+		time.Sleep(time.Second)
+	}
+}
+
+func updateCoreCache(cache SinklistCache, req *http.Request, cacheFile string) error {
 	coreCache, err := downloadCache(req, cacheFile)
 	if err != nil {
 		logger.Error("Error updating core cache:", err)
+		return err
 	}
 	updateCache(cache, coreCache)
+	return nil
 }
 
 func downloadCache(req *http.Request, cacheFile string) (*CoreCache, error) {
@@ -122,13 +155,14 @@ func updateCache(cache SinklistCache, coreCache *CoreCache) {
 	// logDebugMemory("After cache update")
 }
 
-func tryLoadCacheFile(cache SinklistCache, file string) {
+func tryLoadCacheFile(cache SinklistCache, file string) error {
 	cacheData, err := readCacheFile(file)
 	if err != nil {
 		logger.Info("Encountered error processing file "+file+" :", err)
-		return
+		return err
 	}
 	updateCache(cache, cacheData)
+	return nil
 }
 
 func readCacheFile(file string) (*CoreCache, error) {

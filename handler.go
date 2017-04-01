@@ -61,11 +61,9 @@ func NewHandler() *GODNSHandler {
 	}
 
 	listCache = NewListCache()
+	StartCoreClient(listCache)
 
 	resolver.init()
-
-	// FillTestData()
-	go StartCoreClient(listCache)
 
 	return &GODNSHandler{resolver, oraculumCache, listCache}
 }
