@@ -23,10 +23,12 @@ type Sinkhole struct {
 type CoreError struct {
 	When time.Time
 	What string
+	URL  string
+}
 }
 
 func (e CoreError) Error() string {
-	return fmt.Sprintf("%v: %v", e.When, e.What)
+	return fmt.Sprintf("%v: %v for %v", e.When, e.What, e.URL)
 }
 
 var (
@@ -38,8 +40,7 @@ var (
 func init() {
 }
 
-func dryAPICall(query string, clientAddress string, qname string) {
-	var trimmedQname = strings.TrimSuffix(qname, ".")
+func dryAPICall(query string, clientAddress string, trimmedQname string) {
 	if atomic.LoadInt64(&disabledSecondsTimestamp) == 0 {
 		logger.Debug("disabledSecondsTimestamp was 0, setting it to the current time")
 		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
@@ -72,20 +73,12 @@ func dryAPICall(query string, clientAddress string, qname string) {
 }
 
 func doAPICall(query string, clientAddress string, trimmedQname string) (value bool, err error) {
-	var bufferQuery bytes.Buffer
-	bufferQuery.WriteString(settings.ORACULUM_URL)
-	bufferQuery.WriteString("/")
-	bufferQuery.WriteString(clientAddress)
-	bufferQuery.WriteString("/")
-	bufferQuery.WriteString(query)
-	bufferQuery.WriteString("/")
-	bufferQuery.WriteString(trimmedQname)
-	url := bufferQuery.String()
+	url := createAPIUrl(clientAddress, query, trimmedQname)
 	logger.Debug("URL:>", url)
 
 	//var jsonStr = []byte(`{"Key":"Something Else"}`)
 	//req, err := http.NewRequest("GET", url, bytes.NewBuffer(jsonStr))
-	req, err := http.NewRequest("GET", url, nil)
+	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set(settings.ORACULUM_ACCESS_TOKEN_KEY, settings.ORACULUM_ACCESS_TOKEN_VALUE)
 	req.Header.Set("Content-Type", "application/json")
 	if settings.CLIENT_ID > 0 {
@@ -104,7 +97,7 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 	body, _ := ioutil.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
 		logger.Debug("Response Body:", string(body))
-		return false, CoreError{time.Now(), "Non HTTP 200."}
+		return false, CoreError{time.Now(), "Non HTTP 200.", url}
 	}
 	// i.e. "null" or possible stray byte, not a sinkhole IP
 	if len(body) < 6 {
@@ -125,24 +118,6 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 }
 
 func sinkitBackendCall(query string, clientAddress string, trimmedQname string, oraculumCache Cache, cacheOnly bool) bool {
-	//TODO This is just a provisional check. We need to think it over...
-	if len(query) > 250 || len(query) < 3 {
-		logger.Warn("Query is too long or too short: %d\n", len(query))
-		return false
-	}
-	if strings.ContainsAny(trimmedQname, " ,*") || strings.ContainsAny(query, " ,*") {
-		logger.Warn("trimmedQname `%s' or query `%s' contained a space, comma or an asterisk.\n", trimmedQname, query)
-		return false
-	}
-	if len(clientAddress) < 3 || len(clientAddress) > 41 {
-		logger.Warn("Client address is too short or too long %s\n", clientAddress)
-		return false
-	}
-	if len(trimmedQname) < 3 || len(trimmedQname) > 250 {
-		logger.Warn("Query FQDN is likely invalid: %s\n", trimmedQname)
-		return false
-	}
-
 	key := RequestHash(query, trimmedQname, clientAddress)
 
 	answer, err := oraculumCache.Get(key)
@@ -175,15 +150,13 @@ func sinkitBackendCall(query string, clientAddress string, trimmedQname string, 
 	return goToSinkhole
 }
 
-func sinkByHostname(qname string, clientAddress string, oraculumCache Cache, cacheOnly bool) bool {
-	var trimmedQname = strings.TrimSuffix(qname, ".")
+func sinkByHostname(trimmedQname string, clientAddress string, oraculumCache Cache, cacheOnly bool) bool {
 	// Yes, twice trimmedQname
 	return sinkitBackendCall(trimmedQname, clientAddress, trimmedQname, oraculumCache, cacheOnly)
 }
 
 // We do not sinkhole here, the side effect is that CNAMEs slip through.
-func sinkByIPAddress(msg *dns.Msg, clientAddress string, qname string, oraculumCache Cache, cacheOnly bool) {
-	var trimmedQname = strings.TrimSuffix(qname, ".")
+func sinkByIPAddress(msg *dns.Msg, clientAddress string, trimmedQname string, oraculumCache Cache, cacheOnly bool) {
 	for _, element := range msg.Answer {
 		logger.Debug("\nKARMTAG: RR Element: %s\n", element)
 		vals := strings.Split(element.String(), "	")
@@ -194,7 +167,7 @@ func sinkByIPAddress(msg *dns.Msg, clientAddress string, qname string, oraculumC
 				logger.Debug("KARMTAG: value matches: %s\n", vals[i])
 				// Length in bytes, not runes. Shorter doesn't make sense.
 				// We ditch .root-servers.net.
-				if len(vals) > i+1 && len(vals[i+1]) > 3 && !strings.HasSuffix(vals[i+1], ".root-servers.net.") {
+				if len(vals) > i+1 && !strings.HasSuffix(vals[i+1], ".root-servers.net.") && isAnswerValid(vals[i+1]) {
 					logger.Debug("KARMTAG: to send to Core: %s\n", vals[i+1])
 					go sinkitBackendCall(strings.TrimSuffix(vals[i+1], "."), clientAddress, trimmedQname, oraculumCache, cacheOnly)
 				}
@@ -213,7 +186,13 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 	logger.Debug("SINKIT_RESOLVER_DISABLE_INFINISPAN FALSE or N/A\n")
 	logger.Debug("\n KARMTAG: Resolved to: %s\n", msg.Answer)
 
-	qnameMD5 := qnameToMD5(qname)
+	trimmedQname := strings.TrimSuffix(qname, ".")
+
+	if !isDNSRequestValid(trimmedQname, clientAddress) {
+		return
+	}
+
+	qnameMD5 := qnameToMD5(trimmedQname)
 
 	if settings.LOCAL_RESOLVER {
 		// check customlist
@@ -226,7 +205,7 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 				logger.Debug("\n KARMTAG: Record %s is allowed in customlist", qname)
 			}
 			// FIXME : log
-			go dryAPICall(qname, clientAddress, qname)
+			go dryAPICall(trimmedQname, clientAddress, trimmedQname)
 			return
 		}
 	}
@@ -246,7 +225,7 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 			sendToSinkhole(msg, qname)
 		}
 		// FIXME : log
-		go dryAPICall(qname, clientAddress, qname)
+		go dryAPICall(trimmedQname, clientAddress, trimmedQname)
 		// for LR end here
 		return
 	}
@@ -255,13 +234,13 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 	if coreDisabledNow {
 		logger.Debug("Core is DISABLED. Gonna call dryAPICall.")
 		//TODO qname or r for the dry run???
-		go dryAPICall(qname, clientAddress, qname)
+		go dryAPICall(trimmedQname, clientAddress, trimmedQname)
 	}
 	if settings.ORACULUM_IP_ADDRESSES_ENABLED {
-		sinkByIPAddress(msg, clientAddress, qname, oraculumCache, coreDisabledNow)
+		sinkByIPAddress(msg, clientAddress, trimmedQname, oraculumCache, coreDisabledNow)
 	}
 	// We do not sinkhole based on IP address.
-	if sinkByHostname(qname, clientAddress, oraculumCache, coreDisabledNow) {
+	if sinkByHostname(trimmedQname, clientAddress, oraculumCache, coreDisabledNow) {
 		logger.Debug("\n KARMTAG: %s GOES TO SINKHOLE!\n", msg.Answer)
 		sendToSinkhole(msg, qname)
 	}
@@ -281,6 +260,18 @@ func sendToSinkhole(msg *dns.Msg, qname string) {
 	return
 }
 
+func createAPIUrl(clientAddress string, query string, trimmedQname string) string {
+	var bufferQuery bytes.Buffer
+	bufferQuery.WriteString(settings.ORACULUM_URL)
+	bufferQuery.WriteString("/")
+	bufferQuery.WriteString(clientAddress)
+	bufferQuery.WriteString("/")
+	bufferQuery.WriteString(query)
+	bufferQuery.WriteString("/")
+	bufferQuery.WriteString(trimmedQname)
+	return bufferQuery.String()
+}
+
 // RequestHash computes hash of dns query
 func RequestHash(query string, trimmedQname string, clientAddress string) string {
 	keygen := md5.New()
@@ -294,10 +285,42 @@ func RequestHash(query string, trimmedQname string, clientAddress string) string
 	return hex.EncodeToString(keygen.Sum(nil))
 }
 
-func qnameToMD5(qname string) string {
+func qnameToMD5(trimmedQname string) string {
 	var buffer bytes.Buffer
 	keygen := md5.New()
-	buffer.WriteString(strings.TrimSuffix(qname, "."))
+	buffer.WriteString(trimmedQname)
 	keygen.Write(buffer.Bytes())
 	return hex.EncodeToString(keygen.Sum(nil))
+}
+
+func isDNSRequestValid(trimmedQname string, clientAddress string) bool {
+	//TODO This is just a provisional check. We need to think it over...
+	if strings.ContainsAny(trimmedQname, " ,*/") {
+		logger.Warn("trimmedQname `%s' contained a space, comma, forward-slash or an asterisk.\n", trimmedQname)
+		return false
+	}
+	if len(clientAddress) < 3 || len(clientAddress) > 41 {
+		logger.Warn("Client address is too short or too long %s\n", clientAddress)
+		return false
+	}
+	if len(trimmedQname) < 3 || len(trimmedQname) > 250 {
+		logger.Warn("Query FQDN is likely invalid: %s\n", trimmedQname)
+		return false
+	}
+
+	return true
+}
+
+func isAnswerValid(answer string) bool {
+	if strings.ContainsAny(answer, " ,*") {
+		logger.Warn("answer `%s' contained a space, comma or an asterisk.\n", answer)
+		return false
+	}
+
+	if len(answer) < 3 || len(answer) > 250 {
+		logger.Warn("Answer is likely invalid: %s\n", answer)
+		return false
+	}
+
+	return true
 }
