@@ -11,7 +11,7 @@ var (
 	CoreClient *http.Client
 )
 
-func init() {
+func initCoreClient(settings Settings) {
 	if settings.LOCAL_RESOLVER {
 		transportHTTP2 := &http.Transport{
 			TLSClientConfig: &tls.Config{

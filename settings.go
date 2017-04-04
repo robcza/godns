@@ -144,4 +144,6 @@ func init() {
 		credentials.caCertPool.AppendCertsFromPEM(caCert)
 		log.Println("Credentials loaded.")
 	}
+
+	initCoreClient(settings)
 }
