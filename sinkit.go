@@ -25,14 +25,12 @@ type CoreError struct {
 	What string
 	URL  string
 }
-}
 
 func (e CoreError) Error() string {
 	return fmt.Sprintf("%v: %v for %v", e.When, e.What, e.URL)
 }
 
 var (
-
 	coreDisabled             uint32 = 0
 	disabledSecondsTimestamp int64  = 0
 )
