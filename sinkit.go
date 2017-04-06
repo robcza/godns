@@ -206,16 +206,14 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 			go dryAPICall(trimmedQname, clientAddress, trimmedQname)
 			return
 		}
-	}
 
-	_, err := caches.Whitelist.Get(qnameMD5)
-	if err == nil {
-		// Skip whitelisted names
-		logger.Debug("\n KARMTAG: Record %s is whitelisted", qname)
-		return
-	}
+		_, err := caches.Whitelist.Get(qnameMD5)
+		if err == nil {
+			// Skip whitelisted names
+			logger.Debug("\n KARMTAG: Record %s is whitelisted", qname)
+			return
+		}
 
-	if settings.LOCAL_RESOLVER {
 		// check ioclist
 		blocked, err := caches.Ioclist.Get(qnameMD5)
 		if err == nil && blocked {

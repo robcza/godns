@@ -60,8 +60,10 @@ func NewHandler() *GODNSHandler {
 		panic("Invalid cache backend")
 	}
 
-	listCache = NewListCache()
-	StartCoreClient(listCache)
+	if settings.LOCAL_RESOLVER {
+		listCache = NewListCache()
+		StartCoreClient(listCache)
+	}
 
 	resolver.init()
 
