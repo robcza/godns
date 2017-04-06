@@ -193,8 +193,12 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 	qnameMD5 := qnameToMD5(trimmedQname)
 
 	if settings.LOCAL_RESOLVER {
+		var (
+			err     error
+			blocked bool
+		)
 		// check customlist
-		blocked, err := caches.Customlist.Get(qnameMD5)
+		blocked, err = caches.Customlist.Get(qnameMD5)
 		if err == nil {
 			if blocked {
 				logger.Debug("\n KARMTAG: Record %s is blocked in customlist", qname)
@@ -207,7 +211,7 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 			return
 		}
 
-		_, err := caches.Whitelist.Get(qnameMD5)
+		_, err = caches.Whitelist.Get(qnameMD5)
 		if err == nil {
 			// Skip whitelisted names
 			logger.Debug("\n KARMTAG: Record %s is whitelisted", qname)
@@ -215,7 +219,7 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 		}
 
 		// check ioclist
-		blocked, err := caches.Ioclist.Get(qnameMD5)
+		blocked, err = caches.Ioclist.Get(qnameMD5)
 		if err == nil && blocked {
 			logger.Debug("\n KARMTAG: Record %s is blocked by ioclist", qname)
 			sendToSinkhole(msg, qname)
