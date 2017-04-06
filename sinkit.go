@@ -133,13 +133,13 @@ func sinkitBackendCall(query string, clientAddress string, trimmedQname string, 
 	if err != nil {
 		atomic.StoreUint32(&coreDisabled, 1)
 		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
-		logger.Error("Core was DISABLED. Error: %s", err)
+		logger.Error("Core was DISABLED. Error: %s, source: %s", err, clientAddress)
 		return false
 	}
 	if elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond {
 		atomic.StoreUint32(&coreDisabled, 1)
 		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
-		logger.Error("Core was DISABLED. Elapsed time: %s, FitResponseTime: %s, Query: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond, trimmedQname)
+		logger.Error("Core was DISABLED. Elapsed time: %s, FitResponseTime: %s, Query: %s, source: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond, trimmedQname, clientAddress)
 		return false
 	}
 
