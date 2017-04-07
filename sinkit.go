@@ -76,7 +76,11 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 
 	//var jsonStr = []byte(`{"Key":"Something Else"}`)
 	//req, err := http.NewRequest("GET", url, bytes.NewBuffer(jsonStr))
-	req, _ := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		logger.Error("Could not initialize http Request for core: ", err)
+		return false, err
+	}
 	req.Header.Set(settings.ORACULUM_ACCESS_TOKEN_KEY, settings.ORACULUM_ACCESS_TOKEN_VALUE)
 	req.Header.Set("Content-Type", "application/json")
 	if settings.CLIENT_ID > 0 {
