@@ -69,6 +69,7 @@ type Settings struct {
 	CACHE_REFRESH_CUSTOMLIST      int
 	CACHE_RETRY_COUNT             int
 	CACHE_RETRY_INTERVAL          int
+	CACHE_REQUEST_TIMEOUT         int
 }
 
 func (s Settings) LogLevel() int {

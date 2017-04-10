@@ -117,7 +117,7 @@ func downloadCache(req *http.Request, cacheFile string) (*CoreCache, error) {
 	var err error
 	err = retry(settings.CACHE_RETRY_COUNT, time.Duration(settings.CACHE_RETRY_INTERVAL)*time.Second, func() (err error) {
 		logger.Debug("Fetching " + cacheFile + " from core")
-		resp, err := CoreClient.Do(req)
+		resp, err := CoreCacheClient.Do(req)
 		if err != nil {
 			return err
 		}
