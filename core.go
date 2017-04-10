@@ -125,7 +125,7 @@ func downloadCache(req *http.Request, cacheFile string) (*CoreCache, error) {
 		if resp.StatusCode != 200 {
 			return fmt.Errorf("Core status code %d", resp.StatusCode)
 		}
-		data, err := ioutil.ReadAll(resp.Body)
+		data, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return err
 		}
