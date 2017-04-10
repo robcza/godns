@@ -231,7 +231,6 @@ func FillTestData() {
 func prepareRequest(uri string) *http.Request {
 	req, _ := http.NewRequest("GET", settings.CACHE_URL+uri, nil)
 	req.Header.Set(settings.ORACULUM_ACCESS_TOKEN_KEY, settings.ORACULUM_ACCESS_TOKEN_VALUE)
-	req.Header.Set("Content-Type", "application/json")
 	if settings.CLIENT_ID > 0 {
 		req.Header.Set(settings.CLIENT_ID_HEADER, strconv.Itoa(settings.CLIENT_ID))
 	}
