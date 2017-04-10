@@ -20,13 +20,21 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
+type CacheFileNotFound struct {
+	file string
+}
+
+func (e CacheFileNotFound) Error() string {
+	return e.file + " " + "not found"
+}
+
 const (
 	whitelistCacheFile  = "/tmp/whitelist.bin"
 	iocCacheFile        = "/tmp/ioc.bin"
 	customListCacheFile = "/tmp/custlist.bin"
 
 	whitelistURI  = "/whitelist"
-	iocURI        = "/ioc"
+	iocURI        = "/ioclist"
 	customListURI = "/customlist"
 
 	md5HeaderKey = "X-file-md5"
@@ -83,19 +91,21 @@ func waitUpdateCaches(listCache *ListCache) {
 }
 
 func ensureCachePrepared(cache SinklistCache, req *http.Request, cacheFile string) {
+	logger.Debug("Checking file " + cacheFile)
 	if tryLoadCacheFile(cache, cacheFile) == nil {
+		logger.Info("Cache loaded from file " + cacheFile)
 		return
 	}
 	for updateCoreCache(cache, req, cacheFile) != nil {
-		logger.Error("Could not download cache, retrying")
+		logger.Error("Could not download cache " + cacheFile + ", retrying")
 		time.Sleep(time.Second)
 	}
+	logger.Info("Cache " + cacheFile + " downloaded and parsed")
 }
 
 func updateCoreCache(cache SinklistCache, req *http.Request, cacheFile string) error {
 	coreCache, err := downloadCache(req, cacheFile)
 	if err != nil {
-		logger.Error("Error updating core cache:", err)
 		return err
 	}
 	updateCache(cache, coreCache)
@@ -106,6 +116,7 @@ func downloadCache(req *http.Request, cacheFile string) (*CoreCache, error) {
 	var data []byte
 	var err error
 	err = retry(settings.CACHE_RETRY_COUNT, time.Duration(settings.CACHE_RETRY_INTERVAL)*time.Second, func() (err error) {
+		logger.Debug("Fetching " + cacheFile + " from core")
 		resp, err := CoreClient.Do(req)
 		if err != nil {
 			return err
@@ -158,9 +169,15 @@ func updateCache(cache SinklistCache, coreCache *CoreCache) {
 func tryLoadCacheFile(cache SinklistCache, file string) error {
 	cacheData, err := readCacheFile(file)
 	if err != nil {
-		logger.Info("Encountered error processing file "+file+" :", err)
+		switch err.(type) {
+		case CacheFileNotFound:
+			logger.Info("Cache file " + file + " not found")
+		default:
+			logger.Warn("Encountered error processing file "+file+" :", err)
+		}
 		return err
 	}
+
 	updateCache(cache, cacheData)
 	return nil
 }
@@ -169,7 +186,7 @@ func readCacheFile(file string) (*CoreCache, error) {
 	// logDebugMemory("Before loading cache file")
 	in, err := ioutil.ReadFile(file)
 	if err != nil {
-		return nil, err
+		return nil, CacheFileNotFound{file: file}
 	}
 
 	// logDebugMemory("Before reading proto")
