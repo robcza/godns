@@ -61,6 +61,7 @@ type Settings struct {
 	ORACULUM_DISABLED             bool
 	ORACULUM_URL                  string
 	ORACULUM_IP_ADDRESSES_ENABLED bool
+	ORACULUM_API_MAX_REQUESTS     int
 	Version                       string
 	NUM_OF_CPUS                   int
 	CACHE_URL                     string
@@ -111,6 +112,9 @@ func init() {
 		}
 		if (settings.INSECURE_SKIP_VERIFY) {
 			log.Println("SINKIT_INSECURE_SKIP_VERIFY is set to true. This is valid only in local testing environment.")
+		}
+		if settings.ORACULUM_API_MAX_REQUESTS < 1 {
+			log.Fatalf("SINKIT_ORACULUM_API_MAX_REQUESTS env var is too low to be valid, content: %s", settings.ORACULUM_API_MAX_REQUESTS)
 		}
 		//log.Println(settings.CLIENT_CRT_BASE64)
 		//log.Println(settings.CLIENT_KEY_BASE64)

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -30,9 +31,14 @@ func (e CoreError) Error() string {
 	return fmt.Sprintf("%v: %v for %v", e.When, e.What, e.URL)
 }
 
+type apiCallItem struct {
+	request *http.Request
+}
+
 var (
 	coreDisabled             uint32 = 0
 	disabledSecondsTimestamp int64  = 0
+	apiCallBucket            chan *apiCallItem
 )
 
 func init() {
@@ -70,6 +76,45 @@ func dryAPICall(query string, clientAddress string, trimmedQname string) {
 	return
 }
 
+func initBuckets() {
+	// prefill api call bucket channel
+	apiCallBucket = make(chan *apiCallItem, settings.ORACULUM_API_MAX_REQUESTS)
+	for i := 0; i < cap(apiCallBucket); i++ {
+		req, err := http.NewRequest("GET", "", nil)
+		if err != nil {
+			logger.Error("Could not initialize http Request for core: ", err)
+		}
+		req.Header.Set(settings.ORACULUM_ACCESS_TOKEN_KEY, settings.ORACULUM_ACCESS_TOKEN_VALUE)
+		req.Header.Set("Content-Type", "application/json")
+		if settings.CLIENT_ID > 0 {
+			req.Header.Set(settings.CLIENT_ID_HEADER, strconv.Itoa(settings.CLIENT_ID))
+		}
+		apiCallBucket <- &apiCallItem{
+			request: req,
+		}
+	}
+}
+
+func dryAPICallBucket(trimmedQname string, clientAddress string) error {
+	if apiCallBucket == nil {
+		initBuckets()
+	}
+
+	select {
+	case item := <-apiCallBucket:
+		apiURL := createAPIUrl(clientAddress, trimmedQname, trimmedQname)
+		logger.Debug("URL:>", apiURL)
+		item.request.URL, _ = url.Parse(apiURL)
+		_, err := runAPICall(item.request)
+		apiCallBucket <- item
+		return err
+	default:
+		// rate exceeded, ignore call
+		logger.Warn("API request limit reached, skipping " + trimmedQname)
+		return nil // BucketError{time.Now(), "Dry API call rate exceeded"}
+	}
+}
+
 func doAPICall(query string, clientAddress string, trimmedQname string) (value bool, err error) {
 	url := createAPIUrl(clientAddress, query, trimmedQname)
 	logger.Debug("URL:>", url)
@@ -87,6 +132,10 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 		req.Header.Set(settings.CLIENT_ID_HEADER, strconv.Itoa(settings.CLIENT_ID))
 	}
 
+	return runAPICall(req)
+}
+
+func runAPICall(req *http.Request) (value bool, err error) {
 	resp, err := CoreClient.Do(req)
 	if err != nil {
 		logger.Debug("There has been an error with backend.")
@@ -99,7 +148,7 @@ func doAPICall(query string, clientAddress string, trimmedQname string) (value b
 	body, _ := ioutil.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
 		logger.Debug("Response Body:", string(body))
-		return false, CoreError{time.Now(), "Non HTTP 200.", url}
+		return false, CoreError{time.Now(), "Non HTTP 200.", req.URL.String()}
 	}
 	// i.e. "null" or possible stray byte, not a sinkhole IP
 	if len(body) < 6 {
@@ -211,7 +260,7 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 				sendToSinkhole(msg, qname)
 			}
 			// FIXME : log
-			go dryAPICall(trimmedQname, clientAddress, trimmedQname)
+			go dryAPICallBucket(trimmedQname, clientAddress)
 			return
 		}
 
@@ -229,7 +278,7 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 			sendToSinkhole(msg, qname)
 		}
 		// FIXME : log
-		go dryAPICall(trimmedQname, clientAddress, trimmedQname)
+		go dryAPICallBucket(trimmedQname, clientAddress)
 		// for LR end here
 		return
 	}
