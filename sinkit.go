@@ -264,21 +264,18 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 			return
 		}
 
-		_, err = caches.Whitelist.Get(qnameMD5)
-		if err == nil {
-			// Skip whitelisted names
-			logger.Debug("\n KARMTAG: Record %s is whitelisted", qname)
-			return
-		}
-
 		// check ioclist
-		_, err = caches.Ioclist.Get(qnameMD5)
+		allowed, err = caches.Ioclist.Get(qnameMD5)
 		if err == nil {
-			logger.Debug("\n KARMTAG: Record %s is blocked by ioclist", qname)
-			sendToSinkhole(msg, qname)
+			if allowed {
+				logger.Debug("\n KARMTAG: Record %s is audited by ioclist", qname)
+			} else {
+				logger.Debug("\n KARMTAG: Record %s is blocked by ioclist", qname)
+				sendToSinkhole(msg, qname)
+			}
+			// FIXME : log
+			go dryAPICallBucket(trimmedQname, clientAddress)
 		}
-		// FIXME : log
-		go dryAPICallBucket(trimmedQname, clientAddress)
 		// for LR end here
 		return
 	}

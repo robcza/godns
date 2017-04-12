@@ -44,7 +44,6 @@ const (
 func StartCoreClient(listCache *ListCache) {
 	if settings.LOCAL_RESOLVER {
 		ensureCachePrepared(listCache.Customlist, prepareRequest(customListURI), customListCacheFile)
-		ensureCachePrepared(listCache.Whitelist, prepareRequest(whitelistURI), whitelistCacheFile)
 		ensureCachePrepared(listCache.Ioclist, prepareRequest(iocURI), iocCacheFile)
 	} else {
 		tryLoadCacheFile(listCache.Whitelist, whitelistCacheFile)
@@ -61,10 +60,11 @@ func waitUpdateCaches(listCache *ListCache) {
 		whitelistReq  *http.Request
 	)
 
-	whitelistReq = prepareRequest(whitelistURI)
 	if settings.LOCAL_RESOLVER {
 		iocReq = prepareRequest(iocURI)
 		customListReq = prepareRequest(customListURI)
+	} else {
+		whitelistReq = prepareRequest(whitelistURI)
 	}
 
 	whitelistTimer := time.NewTicker(time.Minute * time.Duration(settings.CACHE_REFRESH_WHITELIST))
@@ -77,7 +77,9 @@ func waitUpdateCaches(listCache *ListCache) {
 	for {
 		select {
 		case <-whitelistTimer.C:
-			updateCoreCache(listCache.Whitelist, whitelistReq, whitelistCacheFile)
+			if !settings.LOCAL_RESOLVER {
+				updateCoreCache(listCache.Whitelist, whitelistReq, whitelistCacheFile)
+			}
 		case <-iocTimer.C:
 			if settings.LOCAL_RESOLVER {
 				updateCoreCache(listCache.Ioclist, iocReq, iocCacheFile)
