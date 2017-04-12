@@ -72,10 +72,6 @@ func (l *GoDNSLogger) Run() {
 }
 
 func (l *GoDNSLogger) writeMesg(mesg string, level int) {
-	if l.level > level {
-		return
-	}
-
 	lm := &logMesg{
 		Level: level,
 		Mesg:  mesg,
@@ -85,26 +81,41 @@ func (l *GoDNSLogger) writeMesg(mesg string, level int) {
 }
 
 func (l *GoDNSLogger) Debug(format string, v ...interface{}) {
+	if l.level > LevelDebug {
+		return
+	}
 	mesg := fmt.Sprintf("[DEBUG] "+format, v...)
 	l.writeMesg(mesg, LevelDebug)
 }
 
 func (l *GoDNSLogger) Info(format string, v ...interface{}) {
+	if l.level > LevelInfo {
+		return
+	}
 	mesg := fmt.Sprintf("[INFO] "+format, v...)
 	l.writeMesg(mesg, LevelInfo)
 }
 
 func (l *GoDNSLogger) Notice(format string, v ...interface{}) {
+	if l.level > LevelNotice {
+		return
+	}
 	mesg := fmt.Sprintf("[NOTICE] "+format, v...)
 	l.writeMesg(mesg, LevelNotice)
 }
 
 func (l *GoDNSLogger) Warn(format string, v ...interface{}) {
+	if l.level > LevelWarn {
+		return
+	}
 	mesg := fmt.Sprintf("[WARN] "+format, v...)
 	l.writeMesg(mesg, LevelWarn)
 }
 
 func (l *GoDNSLogger) Error(format string, v ...interface{}) {
+	if l.level > LevelError {
+		return
+	}
 	mesg := fmt.Sprintf("[ERROR] "+format, v...)
 	l.writeMesg(mesg, LevelError)
 }
