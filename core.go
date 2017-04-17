@@ -1,17 +1,11 @@
 package main
 
 import (
-	"encoding/csv"
 	"io/ioutil"
-	"log"
 	"net/http"
-	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
-
-	"io"
 
 	"crypto/md5"
 
@@ -159,9 +153,9 @@ func downloadCache(req *http.Request, cacheFile string) (*CoreCache, error) {
 
 func updateCache(cache SinklistCache, coreCache *CoreCache) {
 	// logDebugMemory("Before cache update")
-	newCache := make(map[string]bool)
+	newCache := make(map[string]tAction)
 	for _, r := range coreCache.Record {
-		newCache[r.GetKey()] = r.GetValue()
+		newCache[r.GetKey()] = tAction(r.GetValue())
 	}
 	// logDebugMemory("After cache prepared")
 	cache.Replace(newCache)
@@ -206,45 +200,6 @@ func logDebugMemory(label string) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	logger.Debug(label+"- Alloc:%d, TotalA:%d, HeapA:%d, HeapSys:%d", mem.Alloc, mem.TotalAlloc, mem.HeapAlloc, mem.HeapSys)
-}
-
-// FillTestData prepares test whitelist cache from hosts.csv file
-func FillTestData() {
-	f, err := os.Open("/hosts.csv")
-	if err != nil {
-		log.Fatalln("Error opening file:", err)
-	}
-	defer f.Close()
-
-	csvr := csv.NewReader(f)
-	cacheData := &CoreCache{}
-
-	for {
-		row, err := csvr.Read()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			log.Fatalln("Unexpected csv error:", err)
-		}
-
-		result := true
-		hash := RequestHash(strings.TrimSuffix(row[0], "."), strings.TrimSuffix(row[0], "."), "")
-		pair := &Pair{
-			Key:   &hash,
-			Value: &result,
-		}
-
-		cacheData.Record = append(cacheData.Record, pair)
-	}
-	log.Println("Writing buffer")
-	out, err := proto.Marshal(cacheData)
-	if err != nil {
-		log.Fatalln("Failed to encode cache:", err)
-	}
-	if err := ioutil.WriteFile(whitelistCacheFile, out, 0644); err != nil {
-		log.Fatalln("Failed to write cache:", err)
-	}
 }
 
 func prepareRequest(uri string) *http.Request {

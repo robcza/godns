@@ -247,33 +247,36 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 
 	if settings.LOCAL_RESOLVER {
 		var (
-			err     error
-			allowed bool
+			err    error
+			action tAction
 		)
-		// check customlist
-		allowed, err = caches.Customlist.Get(qnameMD5)
+		// check customlist - log/block/white
+		action, err = caches.Customlist.Get(qnameMD5)
 		if err == nil {
-			if allowed {
+			if action == ActionWhite {
 				logger.Debug("\n KARMTAG: Record %s is allowed in customlist", qname)
 			} else {
-				logger.Debug("\n KARMTAG: Record %s is blocked in customlist", qname)
-				sendToSinkhole(msg, qname)
+				// block or log only
+				if action == ActionBlack {
+					logger.Debug("\n KARMTAG: Record %s is blocked in customlist", qname)
+					sendToSinkhole(msg, qname)
+				} else {
+					logger.Debug("\n KARMTAG: Record %s is audited by customlist", qname)
+				}
+				go dryAPICallBucket(trimmedQname, clientAddress)
 			}
-			// FIXME : log
-			go dryAPICallBucket(trimmedQname, clientAddress)
 			return
 		}
 
-		// check ioclist
-		allowed, err = caches.Ioclist.Get(qnameMD5)
+		// check ioclist, only log/block
+		action, err = caches.Ioclist.Get(qnameMD5)
 		if err == nil {
-			if allowed {
+			if action == ActionLog {
 				logger.Debug("\n KARMTAG: Record %s is audited by ioclist", qname)
 			} else {
 				logger.Debug("\n KARMTAG: Record %s is blocked by ioclist", qname)
 				sendToSinkhole(msg, qname)
 			}
-			// FIXME : log
 			go dryAPICallBucket(trimmedQname, clientAddress)
 		}
 		// for LR end here
