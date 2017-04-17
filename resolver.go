@@ -39,9 +39,11 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr, orac
 		WriteTimeout: r.Timeout(),
 	}
 
+	/** EDNS(0) was causing problems in large packets - playstation, meteo, ... removing
 	if net == "udp" {
 		req = req.SetEdns0(uint16(settings.GODNS_UDP_PACKET_SIZE), true)
 	}
+	*/
 
 	qname := req.Question[0].Name
 	//TODO: IPv6
