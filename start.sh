@@ -33,7 +33,7 @@ TOTAL_RAM_K=$(free -k | awk '/^Mem:/{print $2}')
 TOTAL_RAM_B=$(($TOTAL_RAM_K*1024))
 
 # Unbound should use up to n % of total RAM
-UNBOUND_MAX_PERCENT=${UNBOUND_MAX_PERCENT:-40}
+UNBOUND_MAX_PERCENT=${UNBOUND_MAX_PERCENT:-30}
 
 # GoDNS should use up to n % of total RAM
 GODNS_MAX_PERCENT=${GODNS_MAX_PERCENT:-30}

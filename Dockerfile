@@ -9,7 +9,7 @@ ENV GODIST      https://storage.googleapis.com/golang/go1.8.linux-amd64.tar.gz
 
 RUN dnf -y update && dnf -y install ${DEPS} && dnf clean all && \
     pip install supervisor && \
-    pip install superlance && \
+    #pip install superlance && \
     useradd -s /sbin/nologin sinkit && \
     cd /opt && wget ${GODIST} && tar -xvf *.tar.gz && rm -rf *.tar.gz
 
@@ -34,8 +34,7 @@ USER sinkit
 RUN mkdir -p ${GOPATH}/src/${GODNSREPO}
 
 #debug
-RUN go get -u github.com/derekparker/delve/cmd/dlv && ls -lah ${GOPATH}/bin && cp ${GOPATH}/bin/dlv /home/sinkit/
-# ADD ./data/hosts.csv /hosts.csv
+#RUN go get -u github.com/derekparker/delve/cmd/dlv && ls -lah ${GOPATH}/bin && cp ${GOPATH}/bin/dlv /home/sinkit/
 
 # GoDNS
 ADD *.proto ${GOPATH}/src/${GODNSREPO}/
@@ -61,14 +60,12 @@ RUN setcap 'cap_net_bind_service=+ep' /home/sinkit/godns
 
 EXPOSE 53/tcp
 EXPOSE 53/udp
-EXPOSE 2345
+#EXPOSE 2345
 
-COPY data/sinkit-cache.bin "/tmp/whitelist.bin"
-
-#CMD ["/home/sinkit/dlv", "debug", "github.com/Karm/godns", "--headless", "--listen=:2345", "--log"]
+# CMD ["/home/sinkit/dlv", "debug", "github.com/Karm/godns", "--headless", "--listen=:2345", "--log"]
 
 CMD ["/usr/bin/start.sh"]
 
 #gcvis
-RUN cd ${GOPATH}/src && go get -u github.com/davecheney/gcvis && cp ${GOPATH}/bin/gcvis /home/sinkit/ && \
-    sed -i 's~command=/home/sinkit/godns~command=/home/sinkit/gcvis -o=false -p 2345 -i "0.0.0.0" /home/sinkit/godns~' /etc/supervisor/conf.d/supervisord.conf
+#RUN cd ${GOPATH}/src && go get -u github.com/davecheney/gcvis && cp ${GOPATH}/bin/gcvis /home/sinkit/ && \
+#    sed -i 's~command=/home/sinkit/godns~command=/home/sinkit/gcvis -o=false -p 2345 -i "0.0.0.0" /home/sinkit/godns~' /etc/supervisor/conf.d/supervisord.conf
