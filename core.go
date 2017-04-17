@@ -23,9 +23,9 @@ func (e CacheFileNotFound) Error() string {
 }
 
 const (
-	whitelistCacheFile  = "/tmp/whitelist.bin"
-	iocCacheFile        = "/tmp/ioc.bin"
-	customListCacheFile = "/tmp/custlist.bin"
+	whitelistCacheFile  = "/data/whitelist.bin"
+	iocCacheFile        = "/data/ioc.bin"
+	customListCacheFile = "/data/custlist.bin"
 
 	whitelistURI  = "/whitelist"
 	iocURI        = "/ioclist"
