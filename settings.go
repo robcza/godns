@@ -65,7 +65,6 @@ type Settings struct {
 	Version                       string
 	NUM_OF_CPUS                   int
 	CACHE_URL                     string
-	CACHE_REFRESH_WHITELIST       int
 	CACHE_REFRESH_IOC             int
 	CACHE_REFRESH_CUSTOMLIST      int
 	CACHE_RETRY_COUNT             int

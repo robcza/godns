@@ -14,7 +14,6 @@ const (
 
 // ListCache contains 3 SinklistCache objects for storing Core data
 type ListCache struct {
-	Whitelist  SinklistCache
 	Customlist SinklistCache
 	Ioclist    SinklistCache
 }
@@ -38,7 +37,6 @@ type SinklistMemoryCache struct {
 // NewListCache creates object for storing whitelist/customlist/ioclist cache
 func NewListCache() *ListCache {
 	return &ListCache{
-		Whitelist:  NewSinklistMemoryCache(),
 		Customlist: NewSinklistMemoryCache(),
 		Ioclist:    NewSinklistMemoryCache(),
 	}

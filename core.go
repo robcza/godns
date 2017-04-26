@@ -23,11 +23,9 @@ func (e CacheFileNotFound) Error() string {
 }
 
 const (
-	whitelistCacheFile  = "/data/whitelist.bin"
 	iocCacheFile        = "/data/ioc.bin"
 	customListCacheFile = "/data/custlist.bin"
 
-	whitelistURI  = "/whitelist"
 	iocURI        = "/ioclist"
 	customListURI = "/customlist"
 
@@ -39,8 +37,6 @@ func StartCoreClient(listCache *ListCache) {
 	if settings.LOCAL_RESOLVER {
 		ensureCachePrepared(listCache.Customlist, prepareRequest(customListURI), customListCacheFile)
 		ensureCachePrepared(listCache.Ioclist, prepareRequest(iocURI), iocCacheFile)
-	} else {
-		tryLoadCacheFile(listCache.Whitelist, whitelistCacheFile)
 	}
 
 	// separate goroutine to keep caches updated
@@ -51,18 +47,13 @@ func waitUpdateCaches(listCache *ListCache) {
 	var (
 		iocReq        *http.Request
 		customListReq *http.Request
-		whitelistReq  *http.Request
 	)
 
 	if settings.LOCAL_RESOLVER {
 		iocReq = prepareRequest(iocURI)
 		customListReq = prepareRequest(customListURI)
-	} else {
-		whitelistReq = prepareRequest(whitelistURI)
 	}
 
-	whitelistTimer := time.NewTicker(time.Minute * time.Duration(settings.CACHE_REFRESH_WHITELIST))
-	defer whitelistTimer.Stop()
 	iocTimer := time.NewTicker(time.Minute * time.Duration(settings.CACHE_REFRESH_IOC))
 	defer iocTimer.Stop()
 	customlistTimer := time.NewTicker(time.Minute * time.Duration(settings.CACHE_REFRESH_CUSTOMLIST))
@@ -70,10 +61,6 @@ func waitUpdateCaches(listCache *ListCache) {
 
 	for {
 		select {
-		case <-whitelistTimer.C:
-			if !settings.LOCAL_RESOLVER {
-				updateCoreCache(listCache.Whitelist, whitelistReq, whitelistCacheFile)
-			}
 		case <-iocTimer.C:
 			if settings.LOCAL_RESOLVER {
 				updateCoreCache(listCache.Ioclist, iocReq, iocCacheFile)
