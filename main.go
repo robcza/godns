@@ -1,66 +1,73 @@
 package main
 
+import _ "net/http/pprof"
 import (
-	"log"
 	"os"
 	"os/signal"
 	"runtime"
 	"time"
+	"log"
+	"net/http"
 )
 
 var (
-	logger *log.Logger
+	logger *GoDNSLogger
 )
 
 func main() {
+	initLogger()
+	// Profiler
+	if (settings.LogLevel() == LevelDebug) {
+		go func() {
+			log.Println(http.ListenAndServe(settings.BIND_HOST + ":6060", nil))
+		}()
+	}
 
-	logger = initLogger(settings.Log.File)
-
-	server := &Server{
-		host:     settings.Server.Host,
-		port:     settings.Server.Port,
-		rTimeout: 5 * time.Second,
-		wTimeout: 5 * time.Second,
+	server := &DNSServer{
+		host:     settings.BIND_HOST,
+		port:     settings.BIND_PORT,
+		rTimeout: time.Duration(settings.GODNS_READ_TIMEOUT) * time.Millisecond,
+		wTimeout: time.Duration(settings.GODNS_WRITE_TIMEOUT) * time.Millisecond,
 	}
 
 	server.Run()
 
-	logger.Printf("godns %s start", settings.Version)
+	logger.Info("godns %s start", settings.Version)
+	logger.Info("godns %s start", settings.Version)
+	logger.Info("Core Backend Settings")
+	logger.Info("  FitResponseTime: %d ms", settings.ORACULUM_API_FIT_TIMEOUT)
+	logger.Info("  HardRequestTimeout: %d ms", settings.ORACULUM_API_TIMEOUT)
+	logger.Info("  SleepWhenDisabled: %d ms", settings.ORACULUM_SLEEP_WHEN_DISABLED)
 
 	sig := make(chan os.Signal)
 	signal.Notify(sig, os.Interrupt)
 
-forever:
+	forever:
 	for {
 		select {
 		case <-sig:
-			logger.Printf("signal received, stopping")
+			logger.Info("signal received, stopping")
 			break forever
 		}
 	}
 
 }
 
-func Debug(format string, v ...interface{}) {
-	if settings.Debug {
-		logger.Printf(format, v...)
-	}
-}
+func initLogger() {
+	logger = NewLogger()
 
-func initLogger(log_file string) (logger *log.Logger) {
-	if log_file != "" {
-		f, err := os.Create(log_file)
-		if err != nil {
-			os.Exit(1)
-		}
-		logger = log.New(f, "[godns]", log.Ldate|log.Ltime)
-	} else {
-		logger = log.New(os.Stdout, "[godns]", log.Ldate|log.Ltime)
+	if settings.LOG_STDOUT {
+		logger.SetLogger("console", nil)
 	}
-	return logger
 
+	if settings.LOG_FILE != "" {
+		config := map[string]interface{}{"file": settings.LOG_FILE}
+		logger.SetLogger("file", config)
+	}
+
+	logger.SetLevel(settings.LogLevel())
 }
 
 func init() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	runtime.GOMAXPROCS(settings.NUM_OF_CPUS)
 }

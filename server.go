@@ -7,19 +7,15 @@ import (
 	"github.com/miekg/dns"
 )
 
-type Server struct {
+type DNSServer struct {
 	host     string
 	port     int
 	rTimeout time.Duration
 	wTimeout time.Duration
 }
 
-func (s *Server) Addr() string {
-	return s.host + ":" + strconv.Itoa(s.port)
-}
-
-func (s *Server) Run() {
-
+func (s *DNSServer) Run() {
+	addr := s.host + ":" + strconv.Itoa(s.port)
 	Handler := NewHandler()
 
 	tcpHandler := dns.NewServeMux()
@@ -28,16 +24,16 @@ func (s *Server) Run() {
 	udpHandler := dns.NewServeMux()
 	udpHandler.HandleFunc(".", Handler.DoUDP)
 
-	tcpServer := &dns.Server{Addr: s.Addr(),
+	tcpServer := &dns.Server{Addr: addr,
 		Net:          "tcp",
 		Handler:      tcpHandler,
 		ReadTimeout:  s.rTimeout,
 		WriteTimeout: s.wTimeout}
 
-	udpServer := &dns.Server{Addr: s.Addr(),
+	udpServer := &dns.Server{Addr: addr,
 		Net:          "udp",
 		Handler:      udpHandler,
-		UDPSize:      65535,
+		UDPSize:      settings.GODNS_UDP_PACKET_SIZE,
 		ReadTimeout:  s.rTimeout,
 		WriteTimeout: s.wTimeout}
 
@@ -46,12 +42,11 @@ func (s *Server) Run() {
 
 }
 
-func (s *Server) start(ds *dns.Server) {
-
-	logger.Printf("Start %s listener on %s\n", ds.Net, s.Addr())
+func (s *DNSServer) start(ds *dns.Server) {
+	addr := s.host + ":" + strconv.Itoa(s.port)
+	logger.Info("Start %s listener on %s", ds.Net, addr)
 	err := ds.ListenAndServe()
 	if err != nil {
-		logger.Fatalf("Start %s listener on %s failed:%s", ds.Net, s.Addr(), err.Error())
+		logger.Error("Start %s listener on %s failed:%s", ds.Net, addr, err.Error())
 	}
-
 }
