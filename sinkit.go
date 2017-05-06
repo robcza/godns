@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+	"regexp"
 )
 
 type Sinkhole struct {
@@ -39,6 +40,7 @@ var (
 	coreDisabled             uint32 = 0
 	disabledSecondsTimestamp int64  = 0
 	apiCallBucket            chan *apiCallItem
+	validQueryOrAddress, _ = regexp.Compile("^[a-zA-Z-_\\.0-9:]+$")
 )
 
 func init() {
@@ -217,8 +219,7 @@ func sinkByIPAddress(msg *dns.Msg, clientAddress string, trimmedQname string, or
 			if strings.EqualFold(vals[i], "A") || strings.EqualFold(vals[i], "CNAME") || strings.EqualFold(vals[i], "AAAA") {
 				logger.Debug("KARMTAG: value matches: %s\n", vals[i])
 				// Length in bytes, not runes. Shorter doesn't make sense.
-				// We ditch .root-servers.net.
-				if len(vals) > i+1 && !strings.HasSuffix(vals[i+1], ".root-servers.net.") && isAnswerValid(vals[i+1]) {
+				if len(vals) > i+1 && isAnswerValid(vals[i+1]) {
 					logger.Debug("KARMTAG: to send to Core: %s\n", vals[i+1])
 					go sinkitBackendCall(strings.TrimSuffix(vals[i+1], "."), clientAddress, trimmedQname, oraculumCache, cacheOnly)
 				}
@@ -347,9 +348,8 @@ func qnameToMD5(trimmedQname string) string {
 }
 
 func isDNSRequestValid(trimmedQname string, clientAddress string) bool {
-	//TODO This is just a provisional check. We need to think it over...
-	if strings.ContainsAny(trimmedQname, " ,*/") {
-		logger.Warn("trimmedQname `%s' contained a space, comma, forward-slash or an asterisk.\n", trimmedQname)
+	if !validQueryOrAddress.MatchString(trimmedQname) {
+		logger.Warn("trimmedQname `%s' contained an illegal character.\n", trimmedQname)
 		return false
 	}
 	if len(clientAddress) < 3 || len(clientAddress) > 41 {
@@ -365,11 +365,13 @@ func isDNSRequestValid(trimmedQname string, clientAddress string) bool {
 }
 
 func isAnswerValid(answer string) bool {
-	if strings.ContainsAny(answer, " ,*") {
-		logger.Warn("answer `%s' contained a space, comma or an asterisk.\n", answer)
+	if strings.HasSuffix(answer, ".root-servers.net.") {
 		return false
 	}
-
+	if !validQueryOrAddress.MatchString(answer) {
+		logger.Warn("answer `%s' contained an illegal character.\n", answer)
+		return false
+	}
 	if len(answer) < 3 || len(answer) > 250 {
 		logger.Warn("Answer is likely invalid: %s\n", answer)
 		return false
