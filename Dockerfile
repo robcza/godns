@@ -1,6 +1,6 @@
 FROM fedora:24
 MAINTAINER Michal Karm Babacek <karm@email.cz>
-ENV DEPS        unbound libevent python-pip wget unzip git wget sed gawk bc tar procps
+ENV DEPS        libevent python-pip wget unzip git wget sed gawk bc tar procps knot-resolver
 ENV GOPATH      /home/sinkit/go
 ENV GOROOT      /opt/go
 ENV GODNSREPO   github.com/Karm/godns
@@ -9,7 +9,6 @@ ENV GODIST      https://storage.googleapis.com/golang/go1.8.linux-amd64.tar.gz
 
 RUN dnf -y update && dnf -y install ${DEPS} && dnf clean all && \
     pip install supervisor && \
-    #pip install superlance && \
     useradd -s /sbin/nologin sinkit && \
     cd /opt && wget ${GODIST} && tar -xvf *.tar.gz && rm -rf *.tar.gz
 
@@ -21,9 +20,6 @@ RUN mkdir /tmp/protoc-temp && \
     chmod a+rx ${GOROOT}/bin/protoc && \
     cd / && \
     rm -rf /tmp/protoc-temp
-
-# Unbound
-ADD unbound.conf /etc/unbound/unbound.conf
 
 # Supervisor
 ADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf
@@ -50,13 +46,12 @@ RUN cd ${GOPATH}/src/${GODNSREPO}/ && \
     go get . && \
     go build && \
     cp godns /home/sinkit/
-    # ls -lah ./ && \
-    # cd /home/sinkit/ && \
-    # ls -lah ./ && \
-    # rm -rf ${GOPATH}
+
+ADD kresd.conf /etc/kresd.conf
 
 USER root
 RUN setcap 'cap_net_bind_service=+ep' /home/sinkit/godns
+RUN mkdir -p /opt/kresd/cachedir && chown kresd /opt/kresd/cachedir
 
 EXPOSE 53/tcp
 EXPOSE 53/udp
