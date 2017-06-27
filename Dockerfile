@@ -38,18 +38,17 @@ RUN mkdir -p ${GOPATH}/src/${GODNSREPO}
 
 # GoDNS
 ADD *.proto ${GOPATH}/src/${GODNSREPO}/
+ADD *.go ${GOPATH}/src/${GODNSREPO}/
 
 RUN cd ${GOPATH}/src/${GODNSREPO}/ && \
     go get -u github.com/golang/protobuf/protoc-gen-go && \
     protoc -I=${GOPATH}/src/${GODNSREPO} --plugin=${GOPATH}/bin/protoc-gen-go --go_out=${GOPATH}/src/${GODNSREPO} ${GOPATH}/src/${GODNSREPO}/sinkit-cache.proto && \
-    ls -lah ./
-
-ADD *.go ${GOPATH}/src/${GODNSREPO}/
-
-RUN cd ${GOPATH}/src/${GODNSREPO}/ && \
+    ls -lah ./ && \
+    cd ${GOPATH}/src/${GODNSREPO}/ && \
     go get . && \
     go build && \
-    cp godns /home/sinkit/
+    cp godns /home/sinkit/ && \
+    rm -rf ${GOPATH}
     # ls -lah ./ && \
     # cd /home/sinkit/ && \
     # ls -lah ./ && \
