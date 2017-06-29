@@ -80,6 +80,7 @@ sed -i "s~@UNBOUND_DO_IP6@~${UNBOUND_DO_IP6:-yes}~g" ${UNBOUND_CONFIG_FILE}
 sed -i "s~@UNBOUND_DO_IP4@~${UNBOUND_DO_IP4:-yes}~g" ${UNBOUND_CONFIG_FILE}
 sed -i "s~@UNBOUND_DO_UDP@~${UNBOUND_DO_UDP:-yes}~g" ${UNBOUND_CONFIG_FILE}
 sed -i "s~@UNBOUND_DO_TCP@~${UNBOUND_DO_TCP:-yes}~g" ${UNBOUND_CONFIG_FILE}
+sed -i "s~@UNBOUND_MODULE_CONFIG@~${UNBOUND_MODULE_CONFIG:-iterator}~g" ${UNBOUND_CONFIG_FILE}
 
 # Start
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf -n
