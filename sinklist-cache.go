@@ -10,12 +10,15 @@ const (
 	ActionBlack = tAction(Action_BLACK)
 	ActionWhite = tAction(Action_WHITE)
 	ActionLog   = tAction(Action_LOG)
+	ActionCheck = tAction(Action_CHECK)
 )
 
 // ListCache contains 3 SinklistCache objects for storing Core data
 type ListCache struct {
-	Customlist SinklistCache
-	Ioclist    SinklistCache
+	Customlist		SinklistCache
+	Ioclist			SinklistCache
+	// Pertinent for cloud resolver, holds really all IoCs and all Custom lists regardless of any setting, i.e. for everybody
+	AllIoCwithCustomLists	SinklistCache
 }
 
 // SinklistCache represents one of caches of Core data - whitelist, customlist, ioclist
@@ -37,8 +40,9 @@ type SinklistMemoryCache struct {
 // NewListCache creates object for storing whitelist/customlist/ioclist cache
 func NewListCache() *ListCache {
 	return &ListCache{
-		Customlist: NewSinklistMemoryCache(),
-		Ioclist:    NewSinklistMemoryCache(),
+		Customlist:            NewSinklistMemoryCache(),
+		Ioclist:               NewSinklistMemoryCache(),
+		AllIoCwithCustomLists: NewSinklistMemoryCache(),
 	}
 }
 

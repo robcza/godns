@@ -37,9 +37,9 @@ type apiCallItem struct {
 }
 
 var (
-	coreDisabled             uint32 = 0
-	disabledSecondsTimestamp int64  = 0
-	apiCallBucket            chan *apiCallItem
+	coreDisabled uint32 = 0
+	disabledSecondsTimestamp int64 = 0
+	apiCallBucket chan *apiCallItem
 	validQueryOrAddress, _ = regexp.Compile("^[a-zA-Z-_\\.0-9:]+$")
 )
 
@@ -54,7 +54,7 @@ func dryAPICall(query string, clientAddress string, trimmedQname string) {
 	}
 	currentTime := int64(time.Now().Unix())
 	lastStamp := atomic.LoadInt64(&disabledSecondsTimestamp)
-	if (currentTime-lastStamp)*1000 > settings.ORACULUM_SLEEP_WHEN_DISABLED {
+	if (currentTime - lastStamp) * 1000 > settings.ORACULUM_SLEEP_WHEN_DISABLED {
 		logger.Debug("Doing dry API call...")
 		start := time.Now()
 		//Doesn't hurt IP
@@ -65,15 +65,15 @@ func dryAPICall(query string, clientAddress string, trimmedQname string) {
 			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 			return
 		}
-		if elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond {
-			logger.Error("Core remains DISABLED. Gonna wait. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond)
+		if elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT) * time.Millisecond {
+			logger.Error("Core remains DISABLED. Gonna wait. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT) * time.Millisecond)
 			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 			return
 		}
 		logger.Error("Core is now ENABLED")
 		atomic.StoreUint32(&coreDisabled, 0)
 	} else {
-		logger.Debug("Not enough time passed, waiting for another call. Elapsed: %s ms, Limit: %s ms", (currentTime-lastStamp)*1000, settings.ORACULUM_SLEEP_WHEN_DISABLED)
+		logger.Debug("Not enough time passed, waiting for another call. Elapsed: %s ms, Limit: %s ms", (currentTime - lastStamp) * 1000, settings.ORACULUM_SLEEP_WHEN_DISABLED)
 	}
 	return
 }
@@ -111,7 +111,7 @@ func dryAPICallBucket(trimmedQname string, clientAddress string) error {
 		apiCallBucket <- item
 		return err
 	default:
-		// rate exceeded, ignore call
+	// rate exceeded, ignore call
 		logger.Warn("API request limit reached, skipping " + trimmedQname)
 		return nil // BucketError{time.Now(), "Dry API call rate exceeded"}
 	}
@@ -191,10 +191,10 @@ func sinkitBackendCall(query string, clientAddress string, trimmedQname string, 
 		logger.Error("Core was DISABLED. Error: %s, source: %s", err, clientAddress)
 		return false
 	}
-	if elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond {
+	if elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT) * time.Millisecond {
 		atomic.StoreUint32(&coreDisabled, 1)
 		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
-		logger.Error("Core was DISABLED. Elapsed time: %s, FitResponseTime: %s, Query: %s, source: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT)*time.Millisecond, trimmedQname, clientAddress)
+		logger.Error("Core was DISABLED. Elapsed time: %s, FitResponseTime: %s, Query: %s, source: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT) * time.Millisecond, trimmedQname, clientAddress)
 		return false
 	}
 
@@ -219,9 +219,9 @@ func sinkByIPAddress(msg *dns.Msg, clientAddress string, trimmedQname string, or
 			if strings.EqualFold(vals[i], "A") || strings.EqualFold(vals[i], "CNAME") || strings.EqualFold(vals[i], "AAAA") {
 				logger.Debug("KARMTAG: value matches: %s\n", vals[i])
 				// Length in bytes, not runes. Shorter doesn't make sense.
-				if len(vals) > i+1 && isAnswerValid(vals[i+1]) {
-					logger.Debug("KARMTAG: to send to Core: %s\n", vals[i+1])
-					go sinkitBackendCall(strings.TrimSuffix(vals[i+1], "."), clientAddress, trimmedQname, oraculumCache, cacheOnly)
+				if len(vals) > i + 1 && isAnswerValid(vals[i + 1]) {
+					logger.Debug("KARMTAG: to send to Core: %s\n", vals[i + 1])
+					go sinkitBackendCall(strings.TrimSuffix(vals[i + 1], "."), clientAddress, trimmedQname, oraculumCache, cacheOnly)
 				}
 				break
 			}
@@ -245,12 +245,11 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 	}
 
 	qnameMD5 := qnameToMD5(trimmedQname)
-
+	var (
+		err error
+		action tAction
+	)
 	if settings.LOCAL_RESOLVER {
-		var (
-			err    error
-			action tAction
-		)
 		// check customlist - log/block/white
 		action, err = caches.Customlist.Get(qnameMD5)
 		if err == nil {
@@ -282,21 +281,27 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 		}
 		// for LR end here
 		return
-	}
-
-	coreDisabledNow := atomic.LoadUint32(&coreDisabled) == 1
-	if coreDisabledNow {
-		logger.Debug("Core is DISABLED. Gonna call dryAPICall.")
-		//TODO qname or r for the dry run???
-		go dryAPICall(trimmedQname, clientAddress, trimmedQname)
-	}
-	if settings.ORACULUM_IP_ADDRESSES_ENABLED {
-		sinkByIPAddress(msg, clientAddress, trimmedQname, oraculumCache, coreDisabledNow)
-	}
-	// We do not sinkhole based on IP address.
-	if sinkByHostname(trimmedQname, clientAddress, oraculumCache, coreDisabledNow) {
-		logger.Debug("\n KARMTAG: %s GOES TO SINKHOLE!\n", msg.Answer)
-		sendToSinkhole(msg, qname)
+	} else {
+		// check list with IoCs and Custom lists, only records found here are checked
+		action, err = caches.AllIoCwithCustomLists.Get(qnameMD5)
+		if err == nil {
+			if action == ActionCheck {
+				coreDisabledNow := atomic.LoadUint32(&coreDisabled) == 1
+				if coreDisabledNow {
+					logger.Debug("Core is DISABLED. Gonna call dryAPICall.")
+					//TODO qname or r for the dry run???
+					go dryAPICall(trimmedQname, clientAddress, trimmedQname)
+				}
+				if settings.ORACULUM_IP_ADDRESSES_ENABLED {
+					sinkByIPAddress(msg, clientAddress, trimmedQname, oraculumCache, coreDisabledNow)
+				}
+				// We do not sinkhole based on IP address.
+				if sinkByHostname(trimmedQname, clientAddress, oraculumCache, coreDisabledNow) {
+					logger.Debug("\n KARMTAG: %s GOES TO SINKHOLE!\n", msg.Answer)
+					sendToSinkhole(msg, qname)
+				}
+			} // no other Action expected to trigger Core API call at this time...
+		}
 	}
 }
 

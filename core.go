@@ -25,9 +25,11 @@ func (e CacheFileNotFound) Error() string {
 const (
 	iocCacheFile        = "/data/ioc.bin"
 	customListCacheFile = "/data/custlist.bin"
+	iocWithCustomCacheFile = "/data/iocwithcustom.bin"
 
 	iocURI        = "/ioclist"
 	customListURI = "/customlist"
+	iocWithCustomURI = "/iocwithcustom"
 
 	md5HeaderKey = "X-file-md5"
 )
@@ -37,6 +39,8 @@ func StartCoreClient(listCache *ListCache) {
 	if settings.LOCAL_RESOLVER {
 		ensureCachePrepared(listCache.Customlist, prepareRequest(customListURI), customListCacheFile)
 		ensureCachePrepared(listCache.Ioclist, prepareRequest(iocURI), iocCacheFile)
+	} else {
+		ensureCachePrepared(listCache.AllIoCwithCustomLists, prepareRequest(iocWithCustomURI), iocWithCustomCacheFile)
 	}
 
 	// separate goroutine to keep caches updated
@@ -47,17 +51,22 @@ func waitUpdateCaches(listCache *ListCache) {
 	var (
 		iocReq        *http.Request
 		customListReq *http.Request
+		iocWithCustomReq *http.Request
 	)
 
 	if settings.LOCAL_RESOLVER {
 		iocReq = prepareRequest(iocURI)
 		customListReq = prepareRequest(customListURI)
+	} else {
+		iocWithCustomReq = prepareRequest(iocWithCustomURI)
 	}
 
 	iocTimer := time.NewTicker(time.Minute * time.Duration(settings.CACHE_REFRESH_IOC))
 	defer iocTimer.Stop()
 	customlistTimer := time.NewTicker(time.Minute * time.Duration(settings.CACHE_REFRESH_CUSTOMLIST))
 	defer customlistTimer.Stop()
+	iocWithCustomTimer := time.NewTicker(time.Minute * time.Duration(settings.CACHE_REFRESH_IOCWITHCUSTOMLIST))
+	defer iocWithCustomTimer.Stop()
 
 	for {
 		select {
@@ -68,6 +77,10 @@ func waitUpdateCaches(listCache *ListCache) {
 		case <-customlistTimer.C:
 			if settings.LOCAL_RESOLVER {
 				updateCoreCache(listCache.Customlist, customListReq, customListCacheFile)
+			}
+		case <-iocWithCustomTimer.C:
+			if !settings.LOCAL_RESOLVER {
+				updateCoreCache(listCache.AllIoCwithCustomLists, iocWithCustomReq, iocWithCustomCacheFile)
 			}
 		}
 	}
