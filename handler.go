@@ -3,6 +3,7 @@ package main
 import (
 	"net"
 	"time"
+        "strings"
 
 	"github.com/miekg/dns"
 )
@@ -70,6 +71,15 @@ func NewHandler() *GODNSHandler {
 	return &GODNSHandler{resolver, oraculumCache, listCache}
 }
 
+func isUDP(w dns.ResponseWriter) bool {
+	return strings.HasPrefix(w.RemoteAddr().Network(), "udp")
+}
+
+func truncate(m *dns.Msg, udp bool) *dns.Msg {
+	m.Truncated = udp && m.Len() > dns.MinMsgSize
+	return m
+}
+
 func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 	q := req.Question[0]
 	Q := Question{UnFqdn(q.Name), dns.TypeToString[q.Qtype], dns.ClassToString[q.Qclass]}
@@ -92,7 +102,8 @@ func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 		return
 	}
 
-	w.WriteMsg(mesg)
+        mesg.Compress = true
+	w.WriteMsg(truncate(mesg, isUDP(w)))
 }
 
 func (h *GODNSHandler) DoTCP(w dns.ResponseWriter, req *dns.Msg) {
