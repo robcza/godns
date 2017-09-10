@@ -258,7 +258,7 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 			} else {
 				// block or log only
 				if action == ActionBlack {
-					logger.Debug("\n KARMTAG: Record %s is blocked in customlist", qname)
+					logger.Info("Record %s is blocked in customlist.\n", qname)
 					sendToSinkhole(msg, qname)
 				} else {
 					logger.Debug("\n KARMTAG: Record %s is audited by customlist", qname)
@@ -274,7 +274,7 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 			if action == ActionLog {
 				logger.Debug("\n KARMTAG: Record %s is audited by ioclist", qname)
 			} else {
-				logger.Debug("\n KARMTAG: Record %s is blocked by ioclist", qname)
+				logger.Info("Record %s is blocked in ioclist.\n", qname)
 				sendToSinkhole(msg, qname)
 			}
 			go dryAPICallBucket(trimmedQname, clientAddress)
@@ -297,7 +297,7 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 				}
 				// We do not sinkhole based on IP address.
 				if sinkByHostname(trimmedQname, clientAddress, oraculumCache, coreDisabledNow) {
-					logger.Debug("\n KARMTAG: %s GOES TO SINKHOLE!\n", msg.Answer)
+					logger.Info("Record %s is blocked by core API call.\n", msg.Answer)
 					sendToSinkhole(msg, qname)
 				}
 			} // no other Action expected to trigger Core API call at this time...
