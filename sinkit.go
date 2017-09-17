@@ -58,13 +58,14 @@ func dryAPICall(query string, clientAddress string, trimmedQname string) {
 		logger.Debug("Doing dry API call...")
 		start := time.Now()
 		//Doesn't hurt IP
-		_, err := doAPICall(trimmedQname, clientAddress, trimmedQname)
+		doAPICall(trimmedQname, clientAddress, trimmedQname)
 		elapsed := time.Since(start)
+		/* Error code is not a factor in Disabled decision any more
 		if err != nil {
 			logger.Error("Core remains DISABLED. Gonna wait. Error: %s", err)
 			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 			return
-		}
+		}*/
 		if elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT) * time.Millisecond {
 			logger.Error("Core remains DISABLED. Gonna wait. Elapsed time: %s, FitResponseTime: %s", elapsed, time.Duration(settings.ORACULUM_API_FIT_TIMEOUT) * time.Millisecond)
 			atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
@@ -185,12 +186,13 @@ func sinkitBackendCall(query string, clientAddress string, trimmedQname string, 
 	start := time.Now()
 	goToSinkhole, err := doAPICall(query, clientAddress, trimmedQname)
 	elapsed := time.Since(start)
+	/* Error code is not a factor in Disabled decision any more
 	if err != nil {
 		atomic.StoreUint32(&coreDisabled, 1)
 		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
 		logger.Error("Core was DISABLED. Error: %s, source: %s", err, clientAddress)
 		return false
-	}
+	}*/
 	if elapsed > time.Duration(settings.ORACULUM_API_FIT_TIMEOUT) * time.Millisecond {
 		atomic.StoreUint32(&coreDisabled, 1)
 		atomic.StoreInt64(&disabledSecondsTimestamp, int64(time.Now().Unix()))
@@ -258,10 +260,12 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 			} else {
 				// block or log only
 				if action == ActionBlack {
-					logger.Info("Record %s is blocked in customlist.\n", qname)
+					logger.Debug("Record %s is blocked in customlist.\n", qname)
+					auditor.Blocked(clientAddress, trimmedQname)
 					sendToSinkhole(msg, qname)
 				} else {
 					logger.Debug("\n KARMTAG: Record %s is audited by customlist", qname)
+					auditor.Audited(clientAddress, trimmedQname)
 				}
 				go dryAPICallBucket(trimmedQname, clientAddress)
 			}
@@ -273,8 +277,10 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 		if err == nil {
 			if action == ActionLog {
 				logger.Debug("\n KARMTAG: Record %s is audited by ioclist", qname)
+				auditor.Audited(clientAddress, trimmedQname)
 			} else {
-				logger.Info("Record %s is blocked in ioclist.\n", qname)
+				logger.Debug("Record %s is blocked in ioclist.\n", qname)
+				auditor.Blocked(clientAddress, trimmedQname)
 				sendToSinkhole(msg, qname)
 			}
 			go dryAPICallBucket(trimmedQname, clientAddress)
@@ -289,15 +295,15 @@ func processCoreCom(msg *dns.Msg, qname string, clientAddress string, oraculumCa
 				coreDisabledNow := atomic.LoadUint32(&coreDisabled) == 1
 				if coreDisabledNow {
 					logger.Debug("Core is DISABLED. Gonna call dryAPICall.")
-					//TODO qname or r for the dry run???
 					go dryAPICall(trimmedQname, clientAddress, trimmedQname)
 				}
 				if settings.ORACULUM_IP_ADDRESSES_ENABLED {
 					sinkByIPAddress(msg, clientAddress, trimmedQname, oraculumCache, coreDisabledNow)
+					// We do not sinkhole based on IP address here.
 				}
-				// We do not sinkhole based on IP address.
 				if sinkByHostname(trimmedQname, clientAddress, oraculumCache, coreDisabledNow) {
-					logger.Info("Record %s is blocked by core API call.\n", msg.Answer)
+					logger.Debug("Record %s is blocked by core API call.\n", msg.Answer)
+					auditor.Blocked(clientAddress, trimmedQname)
 					sendToSinkhole(msg, qname)
 				}
 			} // no other Action expected to trigger Core API call at this time...

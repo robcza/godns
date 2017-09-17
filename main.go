@@ -12,10 +12,15 @@ import (
 
 var (
 	logger *GoDNSLogger
+	auditor *GoDNSLogger
 )
 
 func main() {
+	// General system messages, errors...
 	initLogger()
+	// JSON auditing block events {"client_ip": "<IP>", "domain": "<domain>", "action": "<audit/block>"}
+	initAuditor()
+
 	// Profiler
 	if (settings.LogLevel() == LevelDebug) {
 		go func() {
@@ -57,15 +62,27 @@ func initLogger() {
 	logger = NewLogger()
 
 	if settings.LOG_STDOUT {
-		logger.SetLogger("console", nil)
+		logger.SetLogger("console", nil, true)
 	}
 
 	if settings.LOG_FILE != "" {
 		config := map[string]interface{}{"file": settings.LOG_FILE}
-		logger.SetLogger("file", config)
+		logger.SetLogger("file", config, true)
 	}
 
 	logger.SetLevel(settings.LogLevel())
+}
+
+
+func initAuditor() {
+	auditor = NewLogger()
+
+	if settings.AUDIT_FILE != "" {
+		config := map[string]interface{}{"file": settings.AUDIT_FILE}
+		auditor.SetLogger("file", config, false)
+	}
+
+	auditor.SetLevel(settings.AuditLevel())
 }
 
 func init() {

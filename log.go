@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 )
 
 const LOG_OUTPUT_BUFFER = 1024
@@ -16,20 +17,27 @@ const (
 	LevelError
 )
 
+const (
+	AllEvents = iota
+	AuditedEvents
+	BlockedEvents
+)
+
 type logMesg struct {
 	Level int
 	Mesg  string
 }
 
 type LoggerHandler interface {
-	Setup(config map[string]interface{}) error
+	Setup(config map[string]interface{}, isTimestamped bool) error
 	Write(mesg *logMesg)
 }
 
 type GoDNSLogger struct {
-	level   int
-	mesgs   chan *logMesg
-	outputs map[string]LoggerHandler
+	level         int
+	mesgs         chan *logMesg
+	isTimestamped bool
+	outputs       map[string]LoggerHandler
 }
 
 func NewLogger() *GoDNSLogger {
@@ -41,7 +49,7 @@ func NewLogger() *GoDNSLogger {
 	return logger
 }
 
-func (l *GoDNSLogger) SetLogger(handlerType string, config map[string]interface{}) {
+func (l *GoDNSLogger) SetLogger(handlerType string, config map[string]interface{}, isTimestamped bool) {
 	var handler LoggerHandler
 	switch handlerType {
 	case "console":
@@ -52,7 +60,7 @@ func (l *GoDNSLogger) SetLogger(handlerType string, config map[string]interface{
 		panic("Unknown log handler.")
 	}
 
-	handler.Setup(config)
+	handler.Setup(config, isTimestamped)
 	l.outputs[handlerType] = handler
 }
 
@@ -120,6 +128,62 @@ func (l *GoDNSLogger) Error(format string, v ...interface{}) {
 	l.writeMesg(mesg, LevelError)
 }
 
+/* We want exactly the https://github.com/golang/go/blob/release-branch.go1.8/src/log/log.go#L76
+   don't we?
+*/
+func itoa(buf *[]byte, i int, wid int) {
+	// Assemble decimal in reverse order.
+	var b [20]byte
+	bp := len(b) - 1
+	for i >= 10 || wid > 1 {
+		wid--
+		q := i / 10
+		b[bp] = byte('0' + i - q*10)
+		bp--
+		i = q
+	}
+	// i < 10
+	b[bp] = byte('0' + i)
+	*buf = append(*buf, b[bp:]...)
+}
+
+func formatTimestampAsInGoLog(t time.Time) []byte {
+	var buf []byte
+	t = t.UTC()
+	year, month, day := t.Date()
+	itoa(&buf, year, 4)
+	buf = append(buf, '/')
+	itoa(&buf, int(month), 2)
+	buf = append(buf, '/')
+	itoa(&buf, day, 2)
+	buf = append(buf, ' ')
+	hour, min, sec := t.Clock()
+	itoa(&buf, hour, 2)
+	buf = append(buf, ':')
+	itoa(&buf, min, 2)
+	buf = append(buf, ':')
+	itoa(&buf, sec, 2)
+	buf = append(buf, '.')
+	itoa(&buf, t.Nanosecond()/1e3, 6)
+	return buf
+}
+
+func (l *GoDNSLogger) Audited(clientAddress string, query string) {
+	if l.level > AuditedEvents {
+		return
+	}
+	mesg := fmt.Sprintf("{\"timestamp\":\"%s\",\"client_ip\":\"%s\",\"domain\":\"%s\",\"action\":\"audit\"}", formatTimestampAsInGoLog(time.Now()), clientAddress, query)
+	l.writeMesg(mesg, AuditedEvents)
+}
+
+func (l *GoDNSLogger) Blocked(clientAddress string, query string) {
+	if l.level > BlockedEvents{
+		return
+	}
+	mesg := fmt.Sprintf("{\"timestamp\":\"%s\",\"client_ip\":\"%s\",\"domain\":\"%s\",\"action\":\"block\"}", formatTimestampAsInGoLog(time.Now()), clientAddress, query)
+	l.writeMesg(mesg, BlockedEvents)
+}
+
 type ConsoleHandler struct {
 	level  int
 	logger *log.Logger
@@ -129,14 +193,17 @@ func NewConsoleHandler() LoggerHandler {
 	return new(ConsoleHandler)
 }
 
-func (h *ConsoleHandler) Setup(config map[string]interface{}) error {
+func (h *ConsoleHandler) Setup(config map[string]interface{}, isTimestamped bool) error {
 	if _level, ok := config["level"]; ok {
 		level := _level.(int)
 		h.level = level
 	}
-	h.logger = log.New(os.Stdout, "", log.Ldate|log.Ltime)
+	if(isTimestamped) {
+		h.logger = log.New(os.Stdout, "", log.Ldate | log.Ltime)
+	} else {
+		h.logger = log.New(os.Stdout, "", 0)
+	}
 	return nil
-
 }
 
 func (h *ConsoleHandler) Write(lm *logMesg) {
@@ -155,7 +222,7 @@ func NewFileHandler() LoggerHandler {
 	return new(FileHandler)
 }
 
-func (h *FileHandler) Setup(config map[string]interface{}) error {
+func (h *FileHandler) Setup(config map[string]interface{}, isTimestamped bool) error {
 	if level, ok := config["level"]; ok {
 		h.level = level.(int)
 	}
@@ -166,8 +233,11 @@ func (h *FileHandler) Setup(config map[string]interface{}) error {
 		if err != nil {
 			return err
 		}
-
-		h.logger = log.New(output, "", log.Ldate|log.Ltime)
+		if(isTimestamped) {
+			h.logger = log.New(output, "", log.Ldate|log.Ltime|log.Lmicroseconds)
+		} else {
+			h.logger = log.New(output, "", 0)
+		}
 	}
 
 	return nil

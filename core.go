@@ -3,7 +3,6 @@ package main
 import (
 	"io/ioutil"
 	"net/http"
-	"runtime"
 	"strconv"
 	"time"
 
@@ -196,11 +195,13 @@ func readCacheFile(file string) (*CoreCache, error) {
 	return cacheData, nil
 }
 
+/* TODO: Make configurable and controllable from the outside
 func logDebugMemory(label string) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	logger.Debug(label+"- Alloc:%d, TotalA:%d, HeapA:%d, HeapSys:%d", mem.Alloc, mem.TotalAlloc, mem.HeapAlloc, mem.HeapSys)
 }
+*/
 
 func prepareRequest(uri string) *http.Request {
 	req, _ := http.NewRequest("GET", settings.CACHE_URL+uri, nil)

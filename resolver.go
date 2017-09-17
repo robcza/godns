@@ -64,7 +64,7 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, remoteAddress net.Addr, orac
 		// that it has been verified no such domain exists and ask other resolvers
 		// would make no sense. See more about #20
 		if r != nil && r.Rcode != dns.RcodeSuccess {
-			logger.Warn("%s failed to get an valid answer on %s", qname, nameserver)
+			logger.Debug("%s failed to get an valid answer on %s", qname, nameserver)
 			if r.Rcode == dns.RcodeServerFailure {
 				return
 			}
