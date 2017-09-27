@@ -22,6 +22,12 @@ var LogLevelMap = map[string]int{
 	"ERROR":    LevelError,
 }
 
+var AuditLevelMap = map[string]int{
+	"ALL":     AllEvents,
+	"AUDITED": AuditedEvents,
+	"BLOCKED": BlockedEvents,
+}
+
 type Credentials struct {
 	clientKeyPair tls.Certificate
 	caCertPool    *x509.CertPool
@@ -38,7 +44,9 @@ type Settings struct {
 	BACKEND_RESOLVER_TICK           int
 	LOG_STDOUT                      bool
 	LOG_FILE                        string
+	AUDIT_FILE                      string
 	LOG_LEVEL                       string
+	AUDIT_LEVEL                     string
 	ORACULUM_CACHE_BACKEND          string
 	ORACULUM_CACHE_EXPIRE           int
 	ORACULUM_CACHE_MAXCOUNT         int
@@ -81,16 +89,31 @@ func (s Settings) LogLevel() int {
 	return l
 }
 
+func (s Settings) AuditLevel() int {
+	if s.AUDIT_LEVEL != "" {
+		l, ok := AuditLevelMap[s.AUDIT_LEVEL]
+		if !ok {
+			panic("Config error: invalid audit level: " + s.AUDIT_LEVEL)
+		}
+		return l
+	} else {
+		return AllEvents
+	}
+}
+
 func init() {
 	err := envconfig.Process("SINKIT", &settings)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	// TODO: This is garbage, needs to pull version from a meta file, git release hook etc.
 	settings.Version = "0.5.0"
 	if (settings.NUM_OF_CPUS == 0 || settings.NUM_OF_CPUS > runtime.NumCPU()) {
 		settings.NUM_OF_CPUS = runtime.NumCPU()
 	}
 	log.Println("Settings loaded.")
+
+	// TODO: validation and sensible defaults for settings env props...
 
 	if (settings.LOCAL_RESOLVER) {
 		//1369 magic number: base64 encoded 1024 ASCII chars.

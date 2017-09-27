@@ -61,10 +61,8 @@ func NewHandler() *GODNSHandler {
 		panic("Invalid cache backend")
 	}
 
-	if settings.LOCAL_RESOLVER {
-		listCache = NewListCache()
-		StartCoreClient(listCache)
-	}
+	listCache = NewListCache()
+	StartCoreClient(listCache)
 
 	resolver.init()
 
@@ -97,7 +95,7 @@ func (h *GODNSHandler) do(Net string, w dns.ResponseWriter, req *dns.Msg) {
 	mesg, err := h.resolver.Lookup(Net, req, w.RemoteAddr(), h.oraculumCache, h.listCache)
 
 	if err != nil {
-		logger.Warn("Resolve query error %s", err)
+		logger.Debug("Resolve query error %s", err)
 		dns.HandleFailed(w, req)
 		return
 	}
